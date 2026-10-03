@@ -19,9 +19,7 @@ pub struct Config {
 
 impl Config {
     pub fn load(path: impl AsRef<Path>) -> Result<Self> {
-        let config = Self::from_file(path)?;
-        config.faceit.validate()?;
-        Ok(config)
+        Self::from_file(path)
     }
 
     fn from_file(path: impl AsRef<Path>) -> Result<Self> {
@@ -47,8 +45,7 @@ mod tests {
     #[test]
     fn config_composes_faceit_settings() {
         let config: Config = toml::from_str(CONFIG).unwrap();
-        config.faceit.validate().unwrap();
         assert_eq!(config.bind_addr.port(), 3000);
-        assert_eq!(config.faceit.channels["streamer"], "donk666");
+        assert_eq!(config.faceit.channels["streamer"].to_string(), "donk666");
     }
 }

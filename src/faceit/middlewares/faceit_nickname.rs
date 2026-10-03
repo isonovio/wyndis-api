@@ -1,89 +1,80 @@
 use axum::{
     Extension,
     extract::{Query, Request, State as AxumState},
-    http::StatusCode,
     middleware::Next,
     response::Response,
 };
 use serde::Deserialize;
 
 use crate::error::Error;
-use crate::faceit::{State, config::is_faceit_nickname};
 
-use super::twitch_channel::TwitchChannel;
-
-#[derive(Clone)]
-pub struct FaceitNickname(pub String);
+use crate::faceit::sites::faceit::FaceitNickname;
+use crate::faceit::sites::nightbot::TwitchChannel;
+use crate::faceit::state::Channels;
 
 #[derive(Deserialize)]
 struct NicknameQuery {
     id: Option<String>,
 }
 
-pub async fn extract_nickname(
-    AxumState(state): AxumState<State>,
+pub async fn extract_faceit_nickname(
+    AxumState(channels): AxumState<Channels>,
     Extension(channel): Extension<TwitchChannel>,
     mut request: Request,
     next: Next,
 ) -> Result<Response, Error> {
     let Query(query) = Query::<NicknameQuery>::try_from_uri(request.uri())
-        .map_err(|_| Error::new(StatusCode::BAD_REQUEST, "Invalid query parameters."))?;
+        .map_err(|_| Error::bad_request("Invalid query parameters"))?;
     let nickname = match query
         .id
         .as_deref()
         .map(str::trim)
         .filter(|id| !id.is_empty())
     {
-        Some(nickname) => nickname,
-        None => match state.channels.get(channel.name()?) {
-            Some(nickname) => nickname,
-            None => {
-                return Err(Error::new(
-                    StatusCode::NOT_FOUND,
-                    "No FACEIT player is configured for this channel.",
-                ));
-            }
-        },
+        Some(nickname) => FaceitNickname::try_from(nickname.to_owned())
+            .map_err(|_| Error::bad_request("Invalid FACEIT nickname"))?,
+        None => channels
+            .get(channel.name()?)
+            .cloned()
+            .ok_or(Error::not_found("Missing FACEIT channel mapping"))?,
     };
-    if !is_faceit_nickname(&nickname) {
-        return Err(Error::new(
-            StatusCode::BAD_REQUEST,
-            "Provide a single FACEIT nickname.",
-        ));
-    }
-    request
-        .extensions_mut()
-        .insert(FaceitNickname(nickname.to_owned()));
+    request.extensions_mut().insert(nickname);
     Ok(next.run(request).await)
 }
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashMap;
+    use std::{collections::HashMap, sync::Arc};
 
-    use super::*;
-    use crate::faceit::{Client, middlewares::twitch_channel};
-    use axum::{Router, body::Body, middleware, routing::get};
+    use axum::{Router, body::Body, http::StatusCode, middleware, routing::get};
     use http_body_util::BodyExt;
     use tower::ServiceExt;
 
+    use crate::faceit::middlewares::twitch_channel;
+
+    use super::*;
+
     #[tokio::test]
     async fn middleware_resolves_nickname_before_handler() {
-        let state = State::with_client(
-            Client::new("test-key").unwrap(),
-            HashMap::from([("Streamer".into(), "owner".into())]),
-        );
-        let app = Router::new()
-            .route(
-                "/",
-                get(
-                    |Extension(FaceitNickname(nickname)): Extension<FaceitNickname>| async move {
-                        nickname
-                    },
-                ),
-            )
-            .route_layer(middleware::from_fn_with_state(state, extract_nickname))
-            .route_layer(middleware::from_fn(twitch_channel::extract_channel));
+        let channels: Channels = Arc::new(HashMap::from([(
+            "Streamer".to_owned().try_into().unwrap(),
+            "owner".to_owned().try_into().unwrap(),
+        )]));
+        let app =
+            Router::new()
+                .route(
+                    "/",
+                    get(
+                        |Extension(nickname): Extension<FaceitNickname>| async move {
+                            nickname.to_string()
+                        },
+                    ),
+                )
+                .route_layer(middleware::from_fn_with_state(
+                    channels,
+                    extract_faceit_nickname,
+                ))
+                .route_layer(middleware::from_fn(twitch_channel::extract_twitch_channel));
         for (uri, header, status, body) in [
             ("/?id=donk666", None, StatusCode::OK, "donk666"),
             ("/?id=donk666", Some("invalid"), StatusCode::OK, "donk666"),
@@ -116,31 +107,31 @@ mod tests {
                 "/?id=two%20names",
                 None,
                 StatusCode::BAD_REQUEST,
-                "Provide a single FACEIT nickname.",
+                "Invalid FACEIT nickname",
             ),
             (
                 "/",
                 None,
                 StatusCode::BAD_REQUEST,
-                "Provide a FACEIT nickname or a Nightbot channel header.",
+                "Missing Nightbot channel header",
             ),
             (
                 "/",
                 Some("invalid"),
                 StatusCode::BAD_REQUEST,
-                "Invalid Twitch channel header.",
+                "Invalid Nightbot channel header",
             ),
             (
                 "/",
                 Some("provider=twitch&name=unknown"),
                 StatusCode::NOT_FOUND,
-                "No FACEIT player is configured for this channel.",
+                "Missing FACEIT channel mapping",
             ),
             (
                 "/?id=a&id=b",
                 None,
                 StatusCode::BAD_REQUEST,
-                "Invalid query parameters.",
+                "Invalid query parameters",
             ),
         ] {
             let mut request = Request::builder().uri(uri);

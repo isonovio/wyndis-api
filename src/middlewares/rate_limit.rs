@@ -44,7 +44,7 @@ fn error_response(error: GovernorError) -> Response {
         GovernorError::TooManyRequests { wait_time, .. } => (
             StatusCode::TOO_MANY_REQUESTS,
             [(header::RETRY_AFTER, wait_time.saturating_add(1).to_string())],
-            "Too many requests. Try again shortly.",
+            "Rate limit exceeded",
         )
             .into_response(),
         error => error.into(),
