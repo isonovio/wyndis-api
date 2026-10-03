@@ -2,6 +2,11 @@
 
 ## Startup
 
+```env
+FACEIT_API_KEY=
+RUST_LOG=wyndis_api=info
+```
+
 ```sh
 cargo run -- config.toml
 ```

@@ -18,3 +18,4 @@
 - Keep `mod.rs` files limited to module definitions and symbol exports.
 - Service state belongs in `state.rs`; routes and middleware belong in separate `routes/` and `middlewares/` submodules.
 - FACEIT middleware resolves the Twitch channel and FACEIT nickname before route handlers run.
+- Keep command-line arguments and environment variables in typed structs in `args.rs` and `env.rs`; load them at startup and pass values to modules.
