@@ -6,11 +6,14 @@ use anyhow::{Context, Result};
 use serde::Deserialize;
 
 use crate::faceit;
+use crate::middlewares::rate_limit;
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Config {
     pub bind_addr: SocketAddr,
+    #[serde(default)]
+    pub rate_limit: rate_limit::Config,
     pub faceit: faceit::Config,
 }
 

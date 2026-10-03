@@ -19,3 +19,5 @@
 - Service state belongs in `state.rs`; routes and middleware belong in separate `routes/` and `middlewares/` submodules.
 - FACEIT middleware resolves the Twitch channel and FACEIT nickname before route handlers run.
 - Keep command-line arguments and environment variables in typed structs in `args.rs` and `env.rs`; load them at startup and pass values to modules.
+- Prefer established middleware over custom infrastructure when it fits; the server rate limit defaults to one request per second globally.
+- Middleware exposes layers attached by route composition; avoid helpers that take ownership of a Router.

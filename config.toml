@@ -1,5 +1,9 @@
 bind_addr = "127.0.0.1:3000"
 
+[rate_limit]
+requests_per_minute = 60
+burst = 1
+
 [faceit.channels]
  "qiyarah" = "Qiyarah"
  "nayomy_cs" = "Nayomy"
