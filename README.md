@@ -26,7 +26,7 @@ cargo clippy --all-targets -- -D warnings
 
 - Nightbot Command
     - Usage: `!elo` / `!elo donk666`
-    - Setup: `$(urlfetch https://your-domain.example/api/faceit/elo?id=$(querystring))`
+    - Setup: `$(urlfetch https://api.wynd.is/api/faceit/elo?id=$(querystring))`
     - Result: `LEVEL 10 | 2345 elo | no. 1234 in EU | Today +25 elo 2W 1L | Last Match 13-8 W 92.50adr 1.50kd`
 
 ```sh
