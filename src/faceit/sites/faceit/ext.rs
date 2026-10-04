@@ -42,17 +42,7 @@ impl Today {
         let mut today = Today::default();
         for offset in (0..=1000).step_by(100) {
             let history = History::fetch(client, id, start, now, offset, 100).await?;
-            for game in &history.items {
-                if game.status != "FINISHED" || game.finished_at < start || game.finished_at > now {
-                    continue;
-                }
-                let (_, won, _) = game.result(id)?;
-                if won {
-                    today.wins += 1;
-                } else {
-                    today.losses += 1;
-                }
-            }
+            today.add_history(&history, id, start, now)?;
             if history.items.len() < 100 {
                 return Ok(today);
             }
@@ -60,6 +50,29 @@ impl Today {
         Err(Error::bad_gateway(
             "Daily history pagination limit exceeded",
         ))
+    }
+
+    fn add_history(
+        &mut self,
+        history: &History,
+        id: Uuid,
+        start: i64,
+        now: i64,
+    ) -> Result<(), Error> {
+        for game in &history.items {
+            if !game.status.eq_ignore_ascii_case("finished")
+                || game.finished_at < start
+                || game.finished_at > now
+            {
+                continue;
+            }
+            let (_, won, _) = game.result(id)?;
+            match won {
+                true => self.wins += 1,
+                false => self.losses += 1,
+            }
+        }
+        Ok(())
     }
 }
 
@@ -99,6 +112,40 @@ fn day_start(now: i64, timezone: Tz) -> Result<i64, Error> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn daily_history_counts_finished_matches_in_the_local_day() {
+        let id = Uuid::from_u128(1);
+        let now = DateTime::parse_from_rfc3339("2026-07-10T12:00:00Z")
+            .unwrap()
+            .timestamp();
+        let start = day_start(now, chrono_tz::Europe::Berlin).unwrap();
+        let items = [
+            ("finished", start, "faction1"),
+            ("finished", start + 1, "faction2"),
+            ("FINISHED", now, "faction1"),
+            ("finished", start - 1, "faction1"),
+            ("finished", now + 1, "faction1"),
+            ("cancelled", start + 1, "faction1"),
+            ("ongoing", start + 1, "faction1"),
+        ]
+        .map(|(status, finished_at, winner)| {
+            serde_json::json!({
+                "match_id": "match",
+                "finished_at": finished_at,
+                "status": status,
+                "results": {"score": {"faction1": 13, "faction2": 8}, "winner": winner},
+                "teams": {
+                    "faction1": {"players": [{"player_id": id}]},
+                    "faction2": {"players": [{"player_id": Uuid::from_u128(2)}]}
+                }
+            })
+        });
+        let history: History = serde_json::from_value(serde_json::json!({"items": items})).unwrap();
+        let mut today = Today::default();
+        today.add_history(&history, id, start, now).unwrap();
+        assert_eq!((today.wins, today.losses), (2, 1));
+    }
 
     #[test]
     fn day_boundary_handles_central_european_summer_time() {
