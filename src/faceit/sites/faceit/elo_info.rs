@@ -69,21 +69,21 @@ impl fmt::Display for EloInfo {
             .unwrap_or_else(|| "N/A".into());
         write!(
             f,
-            "LEVEL {} | {} elo | no. {} in {} | Today {} elo {}W {}L | Last Match ",
+            "LEVEL {} | {} elo | no. {} in {} | Today {} elo {}W-{}L",
             self.level, self.elo, rank, self.region, diff, self.today.wins, self.today.losses
         )?;
-        match &self.last_match {
-            Some(last) => write!(
+        if let Some(last) = &self.last_match {
+            write!(
                 f,
-                "{}-{} {} {}adr {}kd",
+                " | Last Match {}-{} {} {}adr {}kd",
                 last.score.0,
                 last.score.1,
                 if last.won { "W" } else { "L" },
                 metric(last.adr),
                 metric(last.kd)
-            ),
-            None => f.write_str("N/A"),
+            )?
         }
+        Ok(())
     }
 }
 
@@ -122,7 +122,7 @@ mod tests {
         };
         assert_eq!(
             info.to_string(),
-            "LEVEL 10 | 2345 elo | no. 1234 in EU | Today +25 elo 2W 1L | Last Match 13-8 W 92.50adr 1.50kd"
+            "LEVEL 10 | 2345 elo | no. 1234 in EU | Today +25 elo 2W-1L | Last Match 13-8 W 92.50adr 1.50kd"
         );
     }
 
@@ -138,7 +138,7 @@ mod tests {
         };
         assert_eq!(
             info.to_string(),
-            "LEVEL 1 | 100 elo | no. N/A in NA | Today N/A elo 0W 0L | Last Match N/A"
+            "LEVEL 1 | 100 elo | no. N/A in NA | Today N/A elo 0W-0L"
         );
     }
 }

@@ -110,7 +110,7 @@ async fn explicit_nickname_overrides_channel_mapping() {
     assert_eq!(status, StatusCode::OK);
     assert_eq!(
         body,
-        "LEVEL 10 | 2345 elo | no. 1234 in EU | Today +0 elo 0W 0L | Last Match N/A"
+        "LEVEL 10 | 2345 elo | no. 1234 in EU | Today +0 elo 0W-0L"
     );
 }
 
