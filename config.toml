@@ -5,5 +5,5 @@ requests_per_minute = 60
 burst = 1
 
 [faceit.channels]
- "qiyarah" = "Qiyarah"
- "nayomy_cs" = "Nayomy"
+"qiyarah" = "Qiyarah"
+"nayomy_cs" = "Nayomy"

@@ -32,6 +32,7 @@ cargo clippy --all-targets -- -D warnings
 ```sh
 curl -i 'http://127.0.0.1:3000/api/faceit/elo?id=Qiyarah'
 ```
+
 ```sh
 curl -i 'http://127.0.0.1:3000/api/faceit/elo' -H 'Nightbot-Channel: provider=twitch&name=qiyarah'
 ```
