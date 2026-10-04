@@ -3,6 +3,8 @@
 - This file belongs to the assistant. Record durable interaction preferences here whenever useful, without asking.
 - Never store secrets, credentials, API keys, tokens, or private information in this file. Personal collaboration preferences are okay to record.
 - Keep the rest of the codebase minimal and text-light.
+- When debugging tooling, trace the exact source of unexpected configuration before proposing overrides or workarounds.
+- Keep constructors short and declarative; extract worker setup and loops into dedicated types, with explicit ownership of their lifecycle.
 - Write minimal comments; prefer clear names and structure.
 - When both branches perform actions, prefer matching on a boolean with `true` and `false` arms over an `if`/`else` expression.
 - Separate import sections with blank lines: first `std`, second external crates, third crate-level imports, then progressively narrower module scopes toward the current module. Follow the grouping pattern in the user's refactored code.
@@ -13,6 +15,8 @@
 - Top-level config and routes compose module configs and routes; logging exposes init; main stays clean.
 - Shared errors are service agnostic; service modules construct them.
 - API clients expose generic fetch methods over Deserialize, with upstream DTOs in the module's models.rs.
+- FACEIT uses one embedded browser client for website API requests; the generic fetch method unwraps payload envelopes so application code stays transport agnostic.
+- Model only upstream fields the application needs; avoid maintaining parallel sets of models for different APIs when one source covers the required data.
 - Output models compose model fetch methods and implement Display; route handlers return their Display text.
 - Daily stats automatically use a simple FACEIT region timezone default; unknown regions use Central European time. Do not expose timezone selection in the query. Avoid overly detailed regional mappings.
 - Keep secrets in environment variables; public configuration should be safe to commit.

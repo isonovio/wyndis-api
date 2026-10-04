@@ -42,33 +42,31 @@ async fn fixture(
     expected_nickname: &str,
 ) -> (Router, MockServer) {
     let expected_nickname = expected_nickname.to_owned();
-    body["player_id"] = json!("00000000-0000-0000-0000-000000000001");
-    let upstream = Router::new().route(
-        "/players",
-        get(
-            move |axum::extract::Query(query): axum::extract::Query<HashMap<String, String>>,
-                  headers: axum::http::HeaderMap| async move {
-                assert_eq!(query["nickname"], expected_nickname);
-                assert_eq!(headers["authorization"], "Bearer test-key");
-                (status, axum::Json(body))
-            },
-        ),
-    );
-    let upstream = upstream
+    body["id"] = json!("00000000-0000-0000-0000-000000000001");
+    let upstream = Router::new()
         .route(
-            "/rankings/games/cs2/regions/EU/players/{id}",
-            get(|| async { axum::Json(json!({"position": 1234})) }),
+            "/users/v1/nicknames/{nickname}",
+            get(
+                move |axum::extract::Path(nickname): axum::extract::Path<String>| async move {
+                    assert_eq!(nickname, expected_nickname);
+                    (status, axum::Json(json!({"payload": body})))
+                },
+            ),
         )
         .route(
-            "/players/{id}/history",
-            get(|| async { axum::Json(json!({"items": []})) }),
+            "/ranking/v1/globalranking/cs2/EU/{id}",
+            get(|| async { axum::Json(json!({"payload": 1234})) }),
+        )
+        .route(
+            "/stats/v1/stats/time/users/{id}/games/cs2",
+            get(|| async { axum::Json(json!([])) }),
         );
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let url = format!("http://{}/", listener.local_addr().unwrap());
     let task = tokio::spawn(async move {
         axum::serve(listener, upstream).await.unwrap();
     });
-    let client = Client::with_base_url("test-key", url.parse().unwrap()).unwrap();
+    let client = Client::with_base_url(url.parse().unwrap()).unwrap();
     let channels = HashMap::from([(
         "Streamer".to_owned().try_into().unwrap(),
         OWNER.to_owned().try_into().unwrap(),
@@ -112,7 +110,7 @@ async fn explicit_nickname_overrides_channel_mapping() {
     assert_eq!(status, StatusCode::OK);
     assert_eq!(
         body,
-        "LEVEL 10 | 2345 elo | no. 1234 in EU | Today N/A elo 0W 0L | Last Match N/A"
+        "LEVEL 10 | 2345 elo | no. 1234 in EU | Today +0 elo 0W 0L | Last Match N/A"
     );
 }
 
@@ -148,7 +146,7 @@ async fn explicit_nickname_does_not_require_nightbot_headers() {
 #[tokio::test]
 async fn invalid_input_and_unknown_channel_are_handled() {
     // Rejected requests never reach FACEIT, so this test needs no listening socket.
-    let client = Client::new("test-key").unwrap();
+    let client = Client::new().unwrap();
     let channels = HashMap::from([(
         "Streamer".to_owned().try_into().unwrap(),
         OWNER.to_owned().try_into().unwrap(),
@@ -196,7 +194,7 @@ async fn missing_cs2_elo_is_not_reported_as_zero() {
         let (app, _mock) = fixture(StatusCode::OK, body, OWNER).await;
         let (status, body) = request(app, &format!("/api/faceit/elo?id={OWNER}"), None).await;
         assert_eq!(status, StatusCode::NOT_FOUND);
-        assert_eq!(body, "Missing CS2 Elo");
+        assert_eq!(body, "This player has no CS2 Elo on FACEIT.");
     }
 }
 

@@ -13,8 +13,8 @@ pub struct State {
 }
 
 impl State {
-    pub fn new(config: config::Config, api_key: &str) -> anyhow::Result<Self> {
-        Ok(Self::with_client(Client::new(api_key)?, config.channels))
+    pub fn new(config: config::Config) -> anyhow::Result<Self> {
+        Ok(Self::with_client(Client::new()?, config.channels))
     }
 
     pub fn with_client(

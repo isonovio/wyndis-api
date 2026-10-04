@@ -11,11 +11,11 @@ use wyndis_api::{args::Args, config::Config, env::Env, logging, routes};
 async fn main() -> Result<()> {
     let args = Args::parse();
     let env = Env::load()?;
-    logging::init(env.log_filter.clone());
+    logging::init(env.log_filter);
     let config = Config::load(args.config)?;
 
     let addr = config.bind_addr;
-    let router = routes::init(config, &env)?;
+    let router = routes::init(config)?;
     serve(addr, router).await?;
 
     Ok(())

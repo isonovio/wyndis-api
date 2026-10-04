@@ -7,8 +7,8 @@ use crate::error::Error;
 
 use super::{
     Client,
-    ext::{LastMatch, Today},
-    models::{FaceitNickname, Player, Ranking, Region},
+    ext::{LastMatch, Ranking, Today, day_start},
+    models::{FaceitNickname, Match, Player, Region},
 };
 
 #[derive(Debug)]
@@ -36,22 +36,22 @@ impl EloInfo {
         now: i64,
     ) -> Result<Self, Error> {
         let player = Player::fetch(client, nickname).await?;
-        let id = player.player_id;
+        let id = player.id;
         let game = player.games.get("cs2").ok_or_else(missing_elo)?;
         let elo = game.faceit_elo.ok_or_else(missing_elo)?;
         let level = game.skill_level.ok_or_else(missing_elo)?;
-        let (rank, today, last_match) = tokio::try_join!(
+        let start = day_start(now, game.region.timezone())?;
+        let (rank, matches) = tokio::try_join!(
             Ranking::fetch(client, id, &game.region),
-            Today::fetch(client, id, game.region.timezone(), now),
-            LastMatch::fetch(client, id, now),
+            Match::fetch(client, id, start, now),
         )?;
         Ok(Self {
             level,
             elo,
             rank: rank.position,
             region: game.region.clone(),
-            today,
-            last_match,
+            today: Today::from_matches(&matches, start, now)?,
+            last_match: matches.first().map(LastMatch::from_match).transpose()?,
         })
     }
 }

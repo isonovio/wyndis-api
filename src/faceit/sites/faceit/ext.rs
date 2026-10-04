@@ -1,3 +1,4 @@
+use axum::http::StatusCode;
 use chrono::{DateTime, TimeZone, Utc};
 use chrono_tz::Tz;
 use uuid::Uuid;
@@ -6,7 +7,7 @@ use crate::error::Error;
 
 use super::{
     Client,
-    models::{History, MatchStats, Region},
+    models::{Match, Region, invalid_data},
 };
 
 #[derive(Debug, Default)]
@@ -24,6 +25,25 @@ pub struct LastMatch {
     pub kd: Option<f64>,
 }
 
+pub struct Ranking {
+    pub position: Option<u32>,
+}
+
+impl Ranking {
+    pub async fn fetch(client: &Client, id: Uuid, region: &Region) -> Result<Self, Error> {
+        match client
+            .fetch::<u32>(&format!("ranking/v1/globalranking/cs2/{region}/{id}"), &[])
+            .await
+        {
+            Ok(position) => Ok(Self {
+                position: Some(position).filter(|position| *position > 0),
+            }),
+            Err(error) if error.status == StatusCode::NOT_FOUND => Ok(Self { position: None }),
+            Err(error) => Err(error),
+        }
+    }
+}
+
 impl Region {
     pub fn timezone(&self) -> Tz {
         match self.to_string().as_str() {
@@ -37,64 +57,52 @@ impl Region {
 }
 
 impl Today {
-    pub async fn fetch(client: &Client, id: Uuid, timezone: Tz, now: i64) -> Result<Self, Error> {
-        let start = day_start(now, timezone)?;
-        let mut today = Today::default();
-        for offset in (0..=1000).step_by(100) {
-            let history = History::fetch(client, id, start, now, offset, 100).await?;
-            today.add_history(&history, id, start, now)?;
-            if history.items.len() < 100 {
-                return Ok(today);
+    pub fn from_matches(matches: &[Match], start: i64, now: i64) -> Result<Self, Error> {
+        let mut today = Self {
+            elo_diff: Some(0),
+            ..Self::default()
+        };
+        for game in matches.iter().filter(|game| {
+            let finished = game.date.div_euclid(1000);
+            game.status == "APPLIED" && finished >= start && finished <= now
+        }) {
+            match game.won()? {
+                true => today.wins += 1,
+                false => today.losses += 1,
+            }
+            match &game.elo_delta {
+                Some(delta) => {
+                    let delta: i32 = delta.parse().map_err(|_| invalid_data())?;
+                    if let Some(total) = today.elo_diff {
+                        today.elo_diff = Some(total.checked_add(delta).ok_or_else(invalid_data)?);
+                    }
+                }
+                None if game.elo.is_some() => today.elo_diff = None,
+                None => {}
             }
         }
-        Err(Error::bad_gateway(
-            "Daily history pagination limit exceeded",
-        ))
-    }
-
-    fn add_history(
-        &mut self,
-        history: &History,
-        id: Uuid,
-        start: i64,
-        now: i64,
-    ) -> Result<(), Error> {
-        for game in &history.items {
-            if !game.status.eq_ignore_ascii_case("finished")
-                || game.finished_at < start
-                || game.finished_at > now
-            {
-                continue;
-            }
-            let (_, won, _) = game.result(id)?;
-            match won {
-                true => self.wins += 1,
-                false => self.losses += 1,
-            }
-        }
-        Ok(())
+        Ok(today)
     }
 }
 
 impl LastMatch {
-    pub async fn fetch(client: &Client, id: Uuid, now: i64) -> Result<Option<Self>, Error> {
-        let history = History::fetch(client, id, 0, now, 0, 1).await?;
-        let Some(game) = history.items.first() else {
-            return Ok(None);
-        };
-        let (score, won, _) = game.result(id)?;
-        let stats = MatchStats::fetch(client, &game.match_id).await?;
-        let player = stats.as_ref().and_then(|stats| stats.player(id));
-        Ok(Some(Self {
-            score,
-            won,
-            adr: player.and_then(|player| player.metric("ADR")),
-            kd: player.and_then(|player| player.metric("K/D Ratio")),
-        }))
+    pub fn from_match(game: &Match) -> Result<Self, Error> {
+        Ok(Self {
+            score: game.score()?,
+            won: game.won()?,
+            adr: metric(game.adr.as_deref()),
+            kd: metric(game.kd.as_deref()),
+        })
     }
 }
 
-fn day_start(now: i64, timezone: Tz) -> Result<i64, Error> {
+fn metric(value: Option<&str>) -> Option<f64> {
+    value
+        .and_then(|value| value.parse::<f64>().ok())
+        .filter(|value| value.is_finite() && *value >= 0.0)
+}
+
+pub(super) fn day_start(now: i64, timezone: Tz) -> Result<i64, Error> {
     let local = DateTime::<Utc>::from_timestamp(now, 0)
         .ok_or_else(|| Error::bad_gateway("Invalid timestamp"))?
         .with_timezone(&timezone);
@@ -113,38 +121,48 @@ fn day_start(now: i64, timezone: Tz) -> Result<i64, Error> {
 mod tests {
     use super::*;
 
+    fn history() -> Vec<Match> {
+        serde_json::from_value(serde_json::json!([
+            {"matchId":"last", "matchRound":"1", "date":1791060033000_i64, "status":"APPLIED",
+             "elo":"3291", "elo_delta":"-1", "i10":"0", "c5":"11", "i18":"11 / 13", "c10":"83.3", "c2":"0.95"},
+            {"matchId":"middle", "matchRound":"1", "date":1791057410000_i64, "status":"APPLIED",
+             "elo":"3292", "elo_delta":"1", "i10":"1", "c5":"13", "i18":"8 / 13"},
+            {"matchId":"first", "matchRound":"1", "date":1791055071000_i64, "status":"APPLIED",
+             "elo":"3291", "elo_delta":"-1", "i10":"0", "c5":"11", "i18":"11 / 13"}
+        ])).unwrap()
+    }
+
     #[test]
-    fn daily_history_counts_finished_matches_in_the_local_day() {
-        let id = Uuid::from_u128(1);
-        let now = DateTime::parse_from_rfc3339("2026-07-10T12:00:00Z")
-            .unwrap()
-            .timestamp();
+    fn history_produces_daily_elo_and_last_match() {
+        let now = 1791060120;
         let start = day_start(now, chrono_tz::Europe::Berlin).unwrap();
-        let items = [
-            ("finished", start, "faction1"),
-            ("finished", start + 1, "faction2"),
-            ("FINISHED", now, "faction1"),
-            ("finished", start - 1, "faction1"),
-            ("finished", now + 1, "faction1"),
-            ("cancelled", start + 1, "faction1"),
-            ("ongoing", start + 1, "faction1"),
-        ]
-        .map(|(status, finished_at, winner)| {
-            serde_json::json!({
-                "match_id": "match",
-                "finished_at": finished_at,
-                "status": status,
-                "results": {"score": {"faction1": 13, "faction2": 8}, "winner": winner},
-                "teams": {
-                    "faction1": {"players": [{"player_id": id}]},
-                    "faction2": {"players": [{"player_id": Uuid::from_u128(2)}]}
-                }
-            })
-        });
-        let history: History = serde_json::from_value(serde_json::json!({"items": items})).unwrap();
-        let mut today = Today::default();
-        today.add_history(&history, id, start, now).unwrap();
-        assert_eq!((today.wins, today.losses), (2, 1));
+        let games = history();
+        let today = Today::from_matches(&games, start, now).unwrap();
+        assert_eq!((today.elo_diff, today.wins, today.losses), (Some(-1), 1, 2));
+        let last = LastMatch::from_match(&games[0]).unwrap();
+        assert_eq!(
+            (last.score, last.won, last.adr, last.kd),
+            ((11, 13), false, Some(83.3), Some(0.95))
+        );
+    }
+
+    #[test]
+    fn missing_adjustments_and_empty_days_are_distinct() {
+        let mut games = history();
+        games[0].elo_delta = None;
+        assert_eq!(
+            Today::from_matches(&games, 0, i64::MAX).unwrap().elo_diff,
+            None
+        );
+        games[0].elo = None;
+        assert_eq!(
+            Today::from_matches(&games, 0, i64::MAX).unwrap().elo_diff,
+            Some(0)
+        );
+        let empty = Today::from_matches(&games, 1791060034, 1791074010).unwrap();
+        assert_eq!((empty.elo_diff, empty.wins, empty.losses), (Some(0), 0, 0));
+        games[0].elo_delta = Some("bad".into());
+        assert!(Today::from_matches(&games, 0, i64::MAX).is_err());
     }
 
     #[test]

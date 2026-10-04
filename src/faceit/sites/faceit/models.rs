@@ -1,6 +1,6 @@
-use std::{collections::HashMap, fmt};
+use std::collections::{HashMap, HashSet};
+use std::fmt;
 
-use axum::http::StatusCode;
 use serde::Deserialize;
 use uuid::Uuid;
 
@@ -10,7 +10,7 @@ use super::Client;
 
 #[derive(Debug, Deserialize)]
 pub struct Player {
-    pub player_id: Uuid,
+    pub id: Uuid,
     #[serde(default)]
     pub games: HashMap<String, Game>,
 }
@@ -23,59 +23,25 @@ pub struct Game {
 }
 
 #[derive(Debug, Deserialize)]
-pub struct Ranking {
-    pub position: Option<u32>,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct History {
-    pub items: Vec<Match>,
-}
-
-#[derive(Debug, Deserialize)]
 pub struct Match {
-    pub match_id: String,
-    pub finished_at: i64,
+    #[serde(rename = "matchId")]
+    pub id: String,
+    #[serde(rename = "matchRound")]
+    pub round: String,
+    pub date: i64,
     pub status: String,
-    pub results: MatchResults,
-    pub teams: HashMap<String, HistoryTeam>,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct MatchResults {
-    pub score: HashMap<String, u32>,
-    pub winner: String,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct HistoryTeam {
-    pub players: Vec<HistoryPlayer>,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct HistoryPlayer {
-    pub player_id: Uuid,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct MatchStats {
-    pub rounds: Vec<RoundStats>,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct RoundStats {
-    pub teams: Vec<StatsTeam>,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct StatsTeam {
-    pub players: Vec<StatsPlayer>,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct StatsPlayer {
-    pub player_id: Uuid,
-    pub player_stats: HashMap<String, String>,
+    pub elo: Option<String>,
+    pub elo_delta: Option<String>,
+    #[serde(rename = "i10")]
+    pub result: String,
+    #[serde(rename = "c5")]
+    pub team_score: String,
+    #[serde(rename = "i18")]
+    pub score: String,
+    #[serde(rename = "c10")]
+    pub adr: Option<String>,
+    #[serde(rename = "c2")]
+    pub kd: Option<String>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Deserialize)]
@@ -127,106 +93,76 @@ impl fmt::Display for Region {
 
 impl Player {
     pub async fn fetch(client: &Client, nickname: &FaceitNickname) -> Result<Self, Error> {
-        client
-            .fetch("players", &[("nickname", nickname.to_string())])
-            .await
-    }
-}
-
-impl Ranking {
-    pub async fn fetch(client: &Client, id: Uuid, region: &Region) -> Result<Self, Error> {
-        let result: Result<Self, _> = client
-            .fetch(
-                &format!("rankings/games/cs2/regions/{region}/players/{id}"),
-                &[],
-            )
-            .await;
-        match result {
-            Ok(mut ranking) => {
-                ranking.position = ranking.position.filter(|position| *position > 0);
-                Ok(ranking)
-            }
-            Err(error) if error.status == StatusCode::NOT_FOUND => Ok(Self { position: None }),
-            Err(error) => Err(error),
-        }
-    }
-}
-
-impl History {
-    pub async fn fetch(
-        client: &Client,
-        id: Uuid,
-        from: i64,
-        to: i64,
-        offset: u32,
-        limit: u32,
-    ) -> Result<Self, Error> {
-        client
-            .fetch(
-                &format!("players/{id}/history"),
-                &[
-                    ("game", "cs2".into()),
-                    ("from", from.to_string()),
-                    ("to", to.to_string()),
-                    ("offset", offset.to_string()),
-                    ("limit", limit.to_string()),
-                ],
-            )
-            .await
-    }
-}
-
-impl MatchStats {
-    pub async fn fetch(client: &Client, match_id: &str) -> Result<Option<Self>, Error> {
-        match client
-            .fetch(&format!("matches/{match_id}/stats"), &[])
-            .await
-        {
-            Ok(stats) => Ok(Some(stats)),
-            Err(error) if error.status == StatusCode::NOT_FOUND => Ok(None),
-            Err(error) => Err(error),
-        }
-    }
-
-    pub fn player(&self, id: Uuid) -> Option<&StatsPlayer> {
-        self.rounds.last().and_then(|round| {
-            round
-                .teams
-                .iter()
-                .flat_map(|team| &team.players)
-                .find(|player| player.player_id == id)
-        })
-    }
-}
-
-impl StatsPlayer {
-    pub fn metric(&self, key: &str) -> Option<f64> {
-        self.player_stats
-            .get(key)
-            .and_then(|value| value.parse::<f64>().ok())
-            .filter(|value| value.is_finite() && *value >= 0.0)
+        let mut path = url::Url::parse("https://api.faceit.com/users/v1/nicknames/")
+            .map_err(|_| invalid_data())?;
+        path.path_segments_mut()
+            .map_err(|_| invalid_data())?
+            .push(&nickname.to_string());
+        client.fetch(path.path().trim_start_matches('/'), &[]).await
     }
 }
 
 impl Match {
-    pub fn result(&self, id: Uuid) -> Result<((u32, u32), bool, &str), Error> {
-        let team = self
-            .teams
-            .iter()
-            .find(|(_, team)| team.players.iter().any(|player| player.player_id == id))
-            .map(|(team, _)| team)
-            .ok_or_else(invalid_data)?;
-        let opponent = self
-            .teams
-            .keys()
-            .find(|key| *key != team)
-            .ok_or_else(invalid_data)?;
-        if !self.teams.contains_key(&self.results.winner) {
-            return Err(invalid_data());
+    pub async fn fetch(
+        client: &Client,
+        id: Uuid,
+        start: i64,
+        now: i64,
+    ) -> Result<Vec<Self>, Error> {
+        let mut matches = Vec::new();
+        let mut seen = HashSet::new();
+        for page in 0..=33 {
+            let history: Vec<Self> = client
+                .fetch(
+                    &format!("stats/v1/stats/time/users/{id}/games/cs2"),
+                    &[("page", page.to_string()), ("size", "30".into())],
+                )
+                .await?;
+            let done = history.len() < 30
+                || history
+                    .iter()
+                    .any(|game| game.date.div_euclid(1000) < start);
+            let mut added = false;
+            for game in history {
+                if game.status == "APPLIED"
+                    && game.date.div_euclid(1000) <= now
+                    && seen.insert((game.id.clone(), game.round.clone()))
+                {
+                    matches.push(game);
+                    added = true;
+                }
+            }
+            if done {
+                matches.sort_by_key(|game| std::cmp::Reverse(game.date));
+                return Ok(matches);
+            }
+            if !added {
+                break;
+            }
         }
-        let own = *self.results.score.get(team).ok_or_else(invalid_data)?;
-        let other = *self.results.score.get(opponent).ok_or_else(invalid_data)?;
-        Ok(((own, other), self.results.winner == *team, team))
+        Err(Error::bad_gateway(
+            "Daily history pagination limit exceeded",
+        ))
+    }
+
+    pub fn won(&self) -> Result<bool, Error> {
+        match self.result.as_str() {
+            "1" => Ok(true),
+            "0" => Ok(false),
+            _ => Err(invalid_data()),
+        }
+    }
+
+    pub fn score(&self) -> Result<(u32, u32), Error> {
+        let (first, second) = self.score.split_once('/').ok_or_else(invalid_data)?;
+        let first: u32 = first.trim().parse().map_err(|_| invalid_data())?;
+        let second: u32 = second.trim().parse().map_err(|_| invalid_data())?;
+        let own: u32 = self.team_score.parse().map_err(|_| invalid_data())?;
+        match own {
+            value if value == first => Ok((own, second)),
+            value if value == second => Ok((own, first)),
+            _ => Err(invalid_data()),
+        }
     }
 }
 
@@ -239,14 +175,19 @@ mod tests {
     use super::*;
 
     #[test]
-    fn scores_and_winner_are_from_players_perspective() {
-        let game: Match = serde_json::from_value(serde_json::json!({
-            "match_id": "match", "finished_at": 10, "status": "FINISHED",
-            "results": {"score": {"faction1": 13, "faction2": 8}, "winner": "faction1"},
-            "teams": {"faction1": {"players": [{"player_id": "00000000-0000-0000-0000-000000000001"}]},
-                "faction2": {"players": [{"player_id": "00000000-0000-0000-0000-000000000002"}]}}
-        })).unwrap();
-        let id = Uuid::parse_str("00000000-0000-0000-0000-000000000002").unwrap();
-        assert_eq!(game.result(id).unwrap(), ((8, 13), false, "faction2"));
+    fn score_is_oriented_using_the_players_team_score() {
+        let mut game: Match = serde_json::from_value(serde_json::json!({
+            "matchId": "match", "matchRound": "1", "date": 1791057410000_i64,
+            "status": "APPLIED", "i10": "1", "c5": "13", "i18": "8 / 13"
+        }))
+        .unwrap();
+        assert_eq!(game.score().unwrap(), (13, 8));
+        assert!(game.won().unwrap());
+        game.team_score = "8".into();
+        game.result = "0".into();
+        assert_eq!(game.score().unwrap(), (8, 13));
+        assert!(!game.won().unwrap());
+        game.team_score = "7".into();
+        assert!(game.score().is_err());
     }
 }
