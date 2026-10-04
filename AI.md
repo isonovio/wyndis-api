@@ -20,7 +20,8 @@
 - Output models compose model fetch methods and implement Display; route handlers return their Display text.
 - Daily stats automatically use a simple FACEIT region timezone default; unknown regions use Central European time. Do not expose timezone selection in the query. Avoid overly detailed regional mappings.
 - Keep secrets in environment variables; public configuration should be safe to commit.
-- Prefer deployment platforms that accept native binaries without requiring container packaging, with simple management and automatic deployments.
+- Prefer deployment platforms with simple management and automatic deployments; Docker packaging is acceptable if its runtime overhead is negligible for this service.
+- Keep low-volume hosting inexpensive and always running; avoid cold starts and full cloud platforms such as AWS.
 - Use readable Twitch channel names and FACEIT nicknames in user-facing requests and configuration. Keep UUIDs internal.
 - FACEIT site code belongs in `faceit/sites/faceit/`: client, native models and their fetch implementations in `models.rs`, derived aggregates in `ext.rs`, and composed output in `elo_info.rs`.
 - `faceit/sites/nightbot` owns Nightbot header definitions and parsing; `faceit/sites/twitch` owns Twitch names. Use validated site types directly in config.
