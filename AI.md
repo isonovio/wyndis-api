@@ -3,6 +3,8 @@
 - This file belongs to the assistant. Record durable interaction preferences here whenever useful, without asking.
 - Never store secrets, credentials, API keys, tokens, or private information in this file. Personal collaboration preferences are okay to record.
 - Keep the rest of the codebase minimal and text-light.
+- Keep conversation handoff prompts to one line; store durable conventions here instead of repeating them in the prompt.
+- Read this file, the current code, and uncommitted changes before continuing work; treat the repository as authoritative and preserve the user's edits.
 - When debugging tooling, trace the exact source of unexpected configuration before proposing overrides or workarounds.
 - Keep constructors short and declarative; extract worker setup and loops into dedicated types, with explicit ownership of their lifecycle.
 - Write minimal comments; prefer clear names and structure.
