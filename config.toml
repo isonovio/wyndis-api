@@ -1,12 +1,12 @@
 bind_addr = "0.0.0.0:3000"
 
 [rate_limit.faceit]
-requests_per_minute = 2
+requests_per_minute = 6
 burst = 1
 
 [rate_limit.global]
-requests_per_minute = 600
-burst = 1
+requests_per_minute = 60000
+burst = 100
 
 [[persons]]
 id = "qiyarah"

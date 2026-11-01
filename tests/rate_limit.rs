@@ -20,7 +20,9 @@ async fn request(app: &Router, path: &str) -> axum::response::Response {
 
 #[tokio::test]
 async fn global_budget_covers_all_routes_and_fallback() {
-    let config = config();
+    let mut config = config();
+    config.rate_limit.global.requests_per_minute = 60.try_into().unwrap();
+    config.rate_limit.global.burst = 1.try_into().unwrap();
     let app = routes::compose(State::new(config.persons).unwrap(), config.rate_limit);
     assert_eq!(
         request(&app, "/missing").await.status(),
@@ -68,7 +70,7 @@ async fn faceit_budget_precedes_upstream_work_and_does_not_limit_age() {
         .unwrap()
         .parse()
         .unwrap();
-    assert!((1..=30).contains(&retry));
+    assert!((1..=10).contains(&retry));
     assert_eq!(
         response.into_body().collect().await.unwrap().to_bytes(),
         "Rate limit exceeded"

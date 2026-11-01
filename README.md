@@ -20,13 +20,13 @@ cargo clippy --all-targets -- -D warnings
 
 ## Endpoints
 
-- Global rate limit: 10/s, burst 1
+- Global rate limit: 1,000/s, burst 100
 
 ### FACEIT
 
 #### Endpoint `GET /api/faceit/elo?id=donk666`
 
-- Rate limit: 1/30s
+- Rate limit: 1/10s
 
 - Nightbot Command
     - Usage: `!elo` / `!elo donk666`
