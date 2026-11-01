@@ -5,8 +5,8 @@ use std::path::Path;
 use anyhow::{Context, Result};
 use serde::Deserialize;
 
-use crate::endpoints::faceit;
 use crate::middlewares::rate_limit;
+use crate::models::Persons;
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -14,7 +14,8 @@ pub struct Config {
     pub bind_addr: SocketAddr,
     #[serde(default)]
     pub rate_limit: rate_limit::Config,
-    pub faceit: faceit::Config,
+    #[serde(default)]
+    pub persons: Persons,
 }
 
 impl Config {

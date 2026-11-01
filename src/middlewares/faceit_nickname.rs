@@ -1,16 +1,15 @@
 use axum::{
     Extension,
-    extract::{Query, Request, State as AxumState},
+    extract::{Query, Request},
     middleware::Next,
     response::Response,
 };
 use serde::Deserialize;
 
 use crate::error::Error;
-
 use crate::sites::faceit::FaceitNickname;
-use crate::sites::nightbot::TwitchChannel;
-use crate::state::Channels;
+
+use super::person::ResolvedPerson;
 
 #[derive(Deserialize)]
 struct NicknameQuery {
@@ -18,8 +17,7 @@ struct NicknameQuery {
 }
 
 pub async fn extract_faceit_nickname(
-    AxumState(channels): AxumState<Channels>,
-    Extension(channel): Extension<TwitchChannel>,
+    Extension(person): Extension<ResolvedPerson>,
     mut request: Request,
     next: Next,
 ) -> Result<Response, Error> {
@@ -33,10 +31,9 @@ pub async fn extract_faceit_nickname(
     {
         Some(nickname) => FaceitNickname::try_from(nickname.to_owned())
             .map_err(|_| Error::bad_request("Invalid FACEIT nickname"))?,
-        None => channels
-            .get(channel.name()?)
-            .cloned()
-            .ok_or(Error::not_found("Missing FACEIT channel mapping"))?,
+        None => person?
+            .faceit_nickname
+            .ok_or_else(|| Error::not_found("Missing FACEIT nickname"))?,
     };
     request.extensions_mut().insert(nickname);
     Ok(next.run(request).await)

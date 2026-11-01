@@ -1,27 +1,23 @@
-use std::{collections::HashMap, sync::Arc};
+use std::sync::Arc;
 
-use crate::endpoints::faceit::config;
-use crate::sites::faceit::{Client, FaceitNickname};
-use crate::sites::twitch::TwitchChannelName;
-
-pub type Channels = Arc<HashMap<TwitchChannelName, FaceitNickname>>;
+use crate::models::Persons;
+use crate::sites::faceit::Client;
 
 #[derive(Clone)]
 pub struct State {
     pub(crate) client: Client,
-    pub(crate) channels: Channels,
+    pub(crate) persons: Arc<Persons>,
 }
 
 impl State {
-    pub fn new(config: config::Config) -> anyhow::Result<Self> {
-        Ok(Self::with_client(Client::new()?, config.channels))
+    pub fn new(persons: Persons) -> anyhow::Result<Self> {
+        Ok(Self::with_client(Client::new()?, persons))
     }
 
-    pub fn with_client(
-        client: Client,
-        channels: HashMap<TwitchChannelName, FaceitNickname>,
-    ) -> Self {
-        let channels: Channels = Arc::new(channels);
-        Self { client, channels }
+    pub fn with_client(client: Client, persons: Persons) -> Self {
+        Self {
+            client,
+            persons: Arc::new(persons),
+        }
     }
 }

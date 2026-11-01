@@ -3,7 +3,7 @@ use axum::{
     response::{IntoResponse, Response},
 };
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Error {
     pub status: StatusCode,
     pub message: String,

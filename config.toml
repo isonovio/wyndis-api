@@ -4,6 +4,12 @@ bind_addr = "0.0.0.0:3000"
 requests_per_minute = 60
 burst = 1
 
-[faceit.channels]
-"qiyarah" = "Qiyarah"
-"nayomy_cs" = "Nayomy"
+[[persons]]
+id = "qiyarah"
+twitch_channel = "qiyarah"
+faceit_nickname = "Qiyarah"
+
+[[persons]]
+id = "nayomy"
+twitch_channel = "nayomy_cs"
+faceit_nickname = "Nayomy"

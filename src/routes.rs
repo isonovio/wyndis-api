@@ -7,7 +7,7 @@ use crate::middlewares::rate_limit;
 use crate::state::State;
 
 pub fn init(config: Config) -> Result<Router> {
-    let state = State::new(config.faceit)?;
+    let state = State::new(config.persons)?;
     Ok(compose(state, config.rate_limit))
 }
 

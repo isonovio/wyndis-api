@@ -18,7 +18,7 @@ anyhow = "1"
 axum = "0.8"
 clap = { version = "4.6", features = ["derive"] }
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
-chrono-tz = "0.10"
+chrono-tz = { version = "0.10", features = ["serde"] }
 governor = "0.10"
 obscura = { git = "https://github.com/h4ckf0r0day/obscura", features = ["stealth"] }
 serde = { version = "1", features = ["derive"] }

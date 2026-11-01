@@ -1,19 +1,17 @@
-use std::{collections::HashMap, sync::Arc};
+use std::sync::Arc;
 
 use axum::{Router, body::Body, http::StatusCode, middleware, routing::get};
 use http_body_util::BodyExt;
 use tower::ServiceExt;
 
-use crate::middlewares::twitch_channel;
+use crate::config::Config;
+use crate::middlewares::{person::extract_person, twitch_channel};
 
 use super::*;
 
 #[tokio::test]
 async fn middleware_resolves_nickname_before_handler() {
-    let channels: Channels = Arc::new(HashMap::from([(
-        "Streamer".to_owned().try_into().unwrap(),
-        "owner".to_owned().try_into().unwrap(),
-    )]));
+    let config: Config = toml::from_str("bind_addr = '127.0.0.1:3000'\n[[persons]]\nid = 'internal-owner'\ntwitch_channel = 'Streamer'\nfaceit_nickname = 'owner'\n[[persons]]\nid = 'no-faceit'\ntwitch_channel = 'empty'").unwrap();
     let app =
         Router::new()
             .route(
@@ -24,12 +22,28 @@ async fn middleware_resolves_nickname_before_handler() {
                     },
                 ),
             )
-            .route_layer(middleware::from_fn_with_state(
-                channels,
-                extract_faceit_nickname,
-            ))
+            .route_layer(middleware::from_fn(extract_faceit_nickname))
+            .route_layer(middleware::from_fn_with_state(Arc::new(config.persons), extract_person))
             .route_layer(middleware::from_fn(twitch_channel::extract_twitch_channel));
     for (uri, header, status, body) in [
+        (
+            "/",
+            Some("provider=twitch&name=empty"),
+            StatusCode::NOT_FOUND,
+            "Missing FACEIT nickname",
+        ),
+        (
+            "/?id=donk666",
+            Some("provider=twitch&name=empty"),
+            StatusCode::OK,
+            "donk666",
+        ),
+        (
+            "/?id=donk666",
+            Some("provider=twitch&name=unknown"),
+            StatusCode::OK,
+            "donk666",
+        ),
         ("/?id=donk666", None, StatusCode::OK, "donk666"),
         ("/?id=donk666", Some("invalid"), StatusCode::OK, "donk666"),
         (
@@ -79,7 +93,7 @@ async fn middleware_resolves_nickname_before_handler() {
             "/",
             Some("provider=twitch&name=unknown"),
             StatusCode::NOT_FOUND,
-            "Missing FACEIT channel mapping",
+            "Unknown person",
         ),
         (
             "/?id=a&id=b",

@@ -5,6 +5,7 @@ pub mod env;
 pub mod error;
 pub mod logging;
 pub mod middlewares;
+pub mod models;
 pub mod routes;
 pub mod sites;
 pub mod state;

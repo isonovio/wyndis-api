@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use axum::{
     Router,
     body::Body,
@@ -9,10 +7,17 @@ use axum::{
 use http_body_util::BodyExt;
 use serde_json::json;
 use tower::ServiceExt;
-use wyndis_api::{middlewares::rate_limit, routes::compose, sites::faceit::Client, state::State};
+use wyndis_api::{
+    config::Config, middlewares::rate_limit, models::Persons, routes::compose,
+    sites::faceit::Client, state::State,
+};
 
 const OWNER: &str = "channel_player";
 const OTHER: &str = "donk666";
+
+fn persons() -> Persons {
+    toml::from_str::<Config>(&format!("bind_addr = '127.0.0.1:3000'\n[[persons]]\nid = 'internal-owner'\ntwitch_channel = 'Streamer'\nfaceit_nickname = '{OWNER}'")).unwrap().persons
+}
 
 fn app(state: State) -> Router {
     compose(
@@ -63,11 +68,8 @@ async fn fixture(
         axum::serve(listener, upstream).await.unwrap();
     });
     let client = Client::with_base_url(url.parse().unwrap()).unwrap();
-    let channels = HashMap::from([(
-        "Streamer".to_owned().try_into().unwrap(),
-        OWNER.to_owned().try_into().unwrap(),
-    )]);
-    (app(State::with_client(client, channels)), MockServer(task))
+    let persons = persons();
+    (app(State::with_client(client, persons)), MockServer(task))
 }
 
 async fn request(app: Router, uri: &str, channel: Option<&str>) -> (StatusCode, String) {
@@ -143,11 +145,8 @@ async fn explicit_nickname_does_not_require_nightbot_headers() {
 async fn invalid_input_and_unknown_channel_are_handled() {
     // Rejected requests never reach FACEIT, so this test needs no listening socket.
     let client = Client::new().unwrap();
-    let channels = HashMap::from([(
-        "Streamer".to_owned().try_into().unwrap(),
-        OWNER.to_owned().try_into().unwrap(),
-    )]);
-    let app = app(State::with_client(client, channels));
+    let persons = persons();
+    let app = app(State::with_client(client, persons));
     for (uri, header, expected) in [
         (
             "/api/faceit/elo?id=two%20names",
