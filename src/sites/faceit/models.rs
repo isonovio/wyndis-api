@@ -97,6 +97,7 @@ impl Player {
             .map_err(|_| invalid_data())?;
         path.path_segments_mut()
             .map_err(|_| invalid_data())?
+            .pop_if_empty()
             .push(&nickname.to_string());
         client.fetch(path.path().trim_start_matches('/'), &[]).await
     }
