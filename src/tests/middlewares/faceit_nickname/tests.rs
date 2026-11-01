@@ -5,14 +5,15 @@ use http_body_util::BodyExt;
 use tower::ServiceExt;
 
 use crate::config::Config;
-use crate::middlewares::{person::extract_person, twitch_channel};
+use crate::middlewares::person::extract_person;
 use crate::sites::faceit;
+use crate::sources::nightbot;
 
 use super::*;
 
 #[tokio::test]
 async fn middleware_resolves_nickname_before_handler() {
-    let config: Config = toml::from_str("bind_addr = '127.0.0.1:3000'\n[[persons]]\nid = 'internal-owner'\ntwitch_channel = 'Streamer'\nfaceit_nickname = 'owner'\n[[persons]]\nid = 'no-faceit'\ntwitch_channel = 'empty'").unwrap();
+    let config: Config = toml::from_str("bind_addr = '127.0.0.1:3000'\n[rate_limit.global]\nrequests_per_minute = 600\nburst = 100\n[rate_limit.faceit]\nrequests_per_minute = 2\nburst = 1\n[[persons]]\nid = 'internal-owner'\ntwitch_channel = 'Streamer'\nfaceit_nickname = 'owner'\n[[persons]]\nid = 'no-faceit'\ntwitch_channel = 'empty'").unwrap();
     let app =
         Router::new()
             .route(
@@ -28,7 +29,7 @@ async fn middleware_resolves_nickname_before_handler() {
                 Arc::new(config.persons),
                 extract_person,
             ))
-            .route_layer(middleware::from_fn(twitch_channel::extract_twitch_channel));
+            .route_layer(middleware::from_fn(nightbot::extract_twitch_channel));
     for (uri, header, status, body) in [
         (
             "/",

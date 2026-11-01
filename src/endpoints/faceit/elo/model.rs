@@ -8,7 +8,7 @@ use crate::error::Error;
 use crate::sites::faceit::{
     Client,
     ext::{LastMatch, Ranking, Today, day_start},
-    models::{Match, Nickname, Player, Region},
+    models::{Match, Player, Region},
 };
 
 #[derive(Debug)]
@@ -22,16 +22,15 @@ pub struct EloInfo {
 }
 
 impl EloInfo {
-    pub async fn fetch(client: &Client, nickname: &Nickname) -> Result<Self, Error> {
+    pub async fn fetch(client: &Client, player: &Player) -> Result<Self, Error> {
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .map_err(|_| Error::internal_server_error("Invalid server time."))?
             .as_secs() as i64;
-        Self::fetch_at(client, nickname, now).await
+        Self::fetch_at(client, player, now).await
     }
 
-    pub async fn fetch_at(client: &Client, nickname: &Nickname, now: i64) -> Result<Self, Error> {
-        let player = Player::fetch(client, nickname).await?;
+    pub async fn fetch_at(client: &Client, player: &Player, now: i64) -> Result<Self, Error> {
         let id = player.id;
         let game = player.games.get("cs2").ok_or_else(missing_elo)?;
         let elo = game.faceit_elo.ok_or_else(missing_elo)?;
@@ -94,5 +93,5 @@ fn missing_elo() -> Error {
 }
 
 #[cfg(test)]
-#[path = "../../tests/endpoints/faceit/elo_info/tests.rs"]
+#[path = "../../../tests/endpoints/faceit/elo/model/tests.rs"]
 mod tests;

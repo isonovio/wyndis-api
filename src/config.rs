@@ -20,8 +20,8 @@ pub struct Config {
 #[derive(Clone, Copy, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct RateLimits {
-    pub elo: rate_limit::Config,
-    pub age: rate_limit::Config,
+    pub faceit: rate_limit::Config,
+    pub global: rate_limit::Config,
 }
 
 impl Config {

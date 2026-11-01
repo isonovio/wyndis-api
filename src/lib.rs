@@ -8,6 +8,7 @@ pub mod middlewares;
 pub mod models;
 pub mod routes;
 pub mod sites;
+pub mod sources;
 pub mod state;
 
 pub const APP: &str = "Wyndis API";

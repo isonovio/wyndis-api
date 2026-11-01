@@ -9,5 +9,5 @@ pub async fn extract_twitch_channel(mut request: Request, next: Next) -> Respons
 }
 
 #[cfg(test)]
-#[path = "../tests/middlewares/twitch_channel/tests.rs"]
+#[path = "../tests/sources/nightbot/tests.rs"]
 mod tests;

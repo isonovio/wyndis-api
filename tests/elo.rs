@@ -20,18 +20,21 @@ const OWNER: &str = "channel_player";
 const OTHER: &str = "donk666";
 
 fn persons() -> Persons {
-    toml::from_str::<Config>(&format!("bind_addr = '127.0.0.1:3000'\n[[persons]]\nid = 'internal-owner'\ntwitch_channel = 'Streamer'\nfaceit_nickname = '{OWNER}'")).unwrap().persons
+    toml::from_str::<Config>(&format!("bind_addr = '127.0.0.1:3000'\n[rate_limit.global]\nrequests_per_minute = 600\nburst = 100\n[rate_limit.faceit]\nrequests_per_minute = 2\nburst = 1\n[[persons]]\nid = 'internal-owner'\ntwitch_channel = 'Streamer'\nfaceit_nickname = '{OWNER}'")).unwrap().persons
 }
 
 fn app(state: State) -> Router {
     compose(
         state,
         RateLimits {
-            elo: rate_limit::Config {
+            faceit: rate_limit::Config {
                 requests_per_minute: std::num::NonZeroU32::new(1000).unwrap(),
                 burst: std::num::NonZeroU32::new(100).unwrap(),
             },
-            ..Default::default()
+            global: rate_limit::Config {
+                requests_per_minute: std::num::NonZeroU32::new(600).unwrap(),
+                burst: std::num::NonZeroU32::new(100).unwrap(),
+            },
         },
     )
 }

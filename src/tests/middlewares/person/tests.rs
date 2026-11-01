@@ -9,13 +9,13 @@ use http_body_util::BodyExt;
 use tower::ServiceExt;
 
 use crate::config::Config;
-use crate::middlewares::twitch_channel::extract_twitch_channel;
+use crate::sources::nightbot::extract_twitch_channel;
 
 use super::*;
 
 #[tokio::test]
 async fn resolves_person_without_requiring_faceit_data() {
-    let config: Config = toml::from_str("bind_addr = '127.0.0.1:3000'\n[[persons]]\nid = 'internal-owner'\ntwitch_channel = 'Streamer'").unwrap();
+    let config: Config = toml::from_str("bind_addr = '127.0.0.1:3000'\n[rate_limit.global]\nrequests_per_minute = 600\nburst = 100\n[rate_limit.faceit]\nrequests_per_minute = 2\nburst = 1\n[[persons]]\nid = 'internal-owner'\ntwitch_channel = 'Streamer'").unwrap();
     let app = Router::new()
         .route(
             "/",

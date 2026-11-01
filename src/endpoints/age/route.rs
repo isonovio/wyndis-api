@@ -1,22 +1,13 @@
-use std::sync::Arc;
-
-use axum::{Extension, Router, middleware, routing::get};
+use axum::{Extension, Router, routing::get};
 use chrono::Utc;
 
 use crate::error::Error;
-use crate::middlewares::person::{ResolvedPerson, extract_person};
-use crate::middlewares::rate_limit;
-use crate::middlewares::twitch_channel::extract_twitch_channel;
-use crate::models::Persons;
+use crate::middlewares::person::ResolvedPerson;
 
 use super::model::Age;
 
-pub fn init(persons: Arc<Persons>, rate_limit: rate_limit::Config) -> Router {
-    Router::new()
-        .route("/age", get(age))
-        .route_layer(middleware::from_fn_with_state(persons, extract_person))
-        .route_layer(middleware::from_fn(extract_twitch_channel))
-        .route_layer(rate_limit::layer(rate_limit))
+pub fn init() -> Router {
+    Router::new().route("/age", get(age))
 }
 
 async fn age(Extension(person): Extension<ResolvedPerson>) -> Result<String, Error> {

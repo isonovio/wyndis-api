@@ -3,7 +3,9 @@ use super::*;
 use crate::config::Config;
 
 fn config(persons: &str) -> Result<Config, toml::de::Error> {
-    toml::from_str(&format!("bind_addr = '127.0.0.1:3000'\n{persons}"))
+    toml::from_str(&format!(
+        "bind_addr = '127.0.0.1:3000'\n[rate_limit.global]\nrequests_per_minute = 600\nburst = 100\n[rate_limit.faceit]\nrequests_per_minute = 2\nburst = 1\n{persons}"
+    ))
 }
 
 #[test]

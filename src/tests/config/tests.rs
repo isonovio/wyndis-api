@@ -1,36 +1,36 @@
 use super::*;
 
+const LIMITS: &str = "[rate_limit.global]\nrequests_per_minute = 600\nburst = 1\n[rate_limit.faceit]\nrequests_per_minute = 2\nburst = 1";
+
 #[test]
 fn configuration_rejects_old_format_and_unknown_fields() {
     for extra in [
         "[faceit.channels]\nstreamer = 'owner'",
-        "api_key = 'secret'",
+        "[unknown]\napi_key = 'secret'",
     ] {
         assert!(
-            toml::from_str::<Config>(&format!("bind_addr = '127.0.0.1:3000'\n{extra}")).is_err()
+            toml::from_str::<Config>(&format!("bind_addr = '127.0.0.1:3000'\n{LIMITS}\n{extra}"))
+                .is_err()
         );
     }
 }
 
 #[test]
-fn endpoint_rate_limits_have_independent_defaults_and_overrides() {
-    let config: Config = toml::from_str("bind_addr = '127.0.0.1:3000'").unwrap();
-    assert_eq!(config.rate_limit.elo.requests_per_minute.get(), 2);
-    assert_eq!(config.rate_limit.age.requests_per_minute.get(), 60);
-    assert_eq!(config.rate_limit.elo.burst.get(), 1);
-    assert_eq!(config.rate_limit.age.burst.get(), 1);
-    let config: Config =
-        toml::from_str("bind_addr = '127.0.0.1:3000'\n[rate_limit.age]\nrequests_per_minute = 120")
-            .unwrap();
-    assert_eq!(config.rate_limit.elo.requests_per_minute.get(), 2);
-    assert_eq!(config.rate_limit.age.requests_per_minute.get(), 120);
-    for limits in [
-        "[rate_limit]\nrequests_per_minute = 60",
-        "[rate_limit.elo]\nrequests_per_minute = 0",
-        "[rate_limit.age]\nburst = 0",
+fn global_and_faceit_limits_are_required_and_validated() {
+    let input = format!("bind_addr = '127.0.0.1:3000'\n{LIMITS}");
+    let config: Config = toml::from_str(&input).unwrap();
+    assert_eq!(config.rate_limit.global.requests_per_minute.get(), 600);
+    assert_eq!(config.rate_limit.faceit.requests_per_minute.get(), 2);
+    assert_eq!(config.rate_limit.global.burst.get(), 1);
+    assert_eq!(config.rate_limit.faceit.burst.get(), 1);
+    assert!(toml::from_str::<Config>("bind_addr = '127.0.0.1:3000'").is_err());
+    for invalid in [
+        input.replace("requests_per_minute = 600", "requests_per_minute = 0"),
+        input.replace("requests_per_minute = 2", "requests_per_minute = 0"),
+        input.replace("burst = 1", "burst = 0"),
+        input.replace("rate_limit.global", "rate_limit.age"),
+        input.replace("rate_limit.faceit", "rate_limit.elo"),
     ] {
-        assert!(
-            toml::from_str::<Config>(&format!("bind_addr = '127.0.0.1:3000'\n{limits}")).is_err()
-        );
+        assert!(toml::from_str::<Config>(&invalid).is_err());
     }
 }

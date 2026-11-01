@@ -20,6 +20,8 @@ cargo clippy --all-targets -- -D warnings
 
 ## Endpoints
 
+- Global rate limit: 10/s, burst 1
+
 ### FACEIT
 
 #### Endpoint `GET /api/faceit/elo?id=donk666`
@@ -42,8 +44,6 @@ curl -i 'http://127.0.0.1:3000/api/faceit/elo' -H 'Nightbot-Channel: provider=tw
 ### Age
 
 #### Endpoint `GET /api/age`
-
-- Rate limit: 1/s
 
 - Nightbot Command
     - Usage: `!age`
