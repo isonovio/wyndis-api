@@ -4,7 +4,7 @@ use chrono::NaiveDate;
 use chrono_tz::Tz;
 use serde::Deserialize;
 
-use crate::sites::faceit::FaceitNickname;
+use crate::sites::faceit;
 use crate::sites::twitch::TwitchChannelName;
 
 use super::utils::{naive_date, slug};
@@ -14,7 +14,7 @@ use super::utils::{naive_date, slug};
 pub struct Person {
     pub id: String,
     pub twitch_channel: Option<String>,
-    pub faceit_nickname: Option<FaceitNickname>,
+    pub faceit_nickname: Option<faceit::Nickname>,
     pub birthday: Option<NaiveDate>,
     pub timezone: Option<Tz>,
 }
@@ -24,7 +24,7 @@ pub struct Person {
 struct PersonConfig {
     id: String,
     twitch_channel: Option<TwitchChannelName>,
-    faceit_nickname: Option<FaceitNickname>,
+    faceit_nickname: Option<faceit::Nickname>,
     birthday: Option<toml::value::Datetime>,
     timezone: Option<Tz>,
 }

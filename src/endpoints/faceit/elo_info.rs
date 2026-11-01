@@ -8,7 +8,7 @@ use crate::error::Error;
 use crate::sites::faceit::{
     Client,
     ext::{LastMatch, Ranking, Today, day_start},
-    models::{FaceitNickname, Match, Player, Region},
+    models::{Match, Nickname, Player, Region},
 };
 
 #[derive(Debug)]
@@ -22,7 +22,7 @@ pub struct EloInfo {
 }
 
 impl EloInfo {
-    pub async fn fetch(client: &Client, nickname: &FaceitNickname) -> Result<Self, Error> {
+    pub async fn fetch(client: &Client, nickname: &Nickname) -> Result<Self, Error> {
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .map_err(|_| Error::internal_server_error("Invalid server time."))?
@@ -30,11 +30,7 @@ impl EloInfo {
         Self::fetch_at(client, nickname, now).await
     }
 
-    pub async fn fetch_at(
-        client: &Client,
-        nickname: &FaceitNickname,
-        now: i64,
-    ) -> Result<Self, Error> {
+    pub async fn fetch_at(client: &Client, nickname: &Nickname, now: i64) -> Result<Self, Error> {
         let player = Player::fetch(client, nickname).await?;
         let id = player.id;
         let game = player.games.get("cs2").ok_or_else(missing_elo)?;

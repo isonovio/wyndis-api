@@ -6,6 +6,7 @@ use tower::ServiceExt;
 
 use crate::config::Config;
 use crate::middlewares::{person::extract_person, twitch_channel};
+use crate::sites::faceit;
 
 use super::*;
 
@@ -17,13 +18,16 @@ async fn middleware_resolves_nickname_before_handler() {
             .route(
                 "/",
                 get(
-                    |Extension(nickname): Extension<FaceitNickname>| async move {
+                    |Extension(nickname): Extension<faceit::Nickname>| async move {
                         nickname.to_string()
                     },
                 ),
             )
             .route_layer(middleware::from_fn(extract_faceit_nickname))
-            .route_layer(middleware::from_fn_with_state(Arc::new(config.persons), extract_person))
+            .route_layer(middleware::from_fn_with_state(
+                Arc::new(config.persons),
+                extract_person,
+            ))
             .route_layer(middleware::from_fn(twitch_channel::extract_twitch_channel));
     for (uri, header, status, body) in [
         (

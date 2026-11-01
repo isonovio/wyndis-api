@@ -7,7 +7,7 @@ use axum::{
 use serde::Deserialize;
 
 use crate::error::Error;
-use crate::sites::faceit::FaceitNickname;
+use crate::sites::faceit;
 
 use super::person::ResolvedPerson;
 
@@ -29,7 +29,7 @@ pub async fn extract_faceit_nickname(
         .map(str::trim)
         .filter(|id| !id.is_empty())
     {
-        Some(nickname) => FaceitNickname::try_from(nickname.to_owned())
+        Some(nickname) => faceit::Nickname::try_from(nickname.to_owned())
             .map_err(|_| Error::bad_request("Invalid FACEIT nickname"))?,
         None => person?
             .faceit_nickname

@@ -46,9 +46,9 @@ pub struct Match {
 
 #[derive(Clone, Debug, Eq, PartialEq, Deserialize)]
 #[serde(try_from = "String")]
-pub struct FaceitNickname(String);
+pub struct Nickname(String);
 
-impl TryFrom<String> for FaceitNickname {
+impl TryFrom<String> for Nickname {
     type Error = &'static str;
 
     fn try_from(nickname: String) -> Result<Self, Self::Error> {
@@ -64,7 +64,7 @@ impl TryFrom<String> for FaceitNickname {
     }
 }
 
-impl fmt::Display for FaceitNickname {
+impl fmt::Display for Nickname {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(&self.0)
     }
@@ -92,7 +92,7 @@ impl fmt::Display for Region {
 }
 
 impl Player {
-    pub async fn fetch(client: &Client, nickname: &FaceitNickname) -> Result<Self, Error> {
+    pub async fn fetch(client: &Client, nickname: &Nickname) -> Result<Self, Error> {
         let mut path = url::Url::parse("https://api.faceit.com/users/v1/nicknames/")
             .map_err(|_| invalid_data())?;
         path.path_segments_mut()

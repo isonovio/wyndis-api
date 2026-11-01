@@ -36,3 +36,15 @@ curl -i 'http://127.0.0.1:3000/api/faceit/elo?id=Qiyarah'
 ```sh
 curl -i 'http://127.0.0.1:3000/api/faceit/elo' -H 'Nightbot-Channel: provider=twitch&name=qiyarah'
 ```
+
+### Age
+
+#### Endpoint `GET /api/age`
+
+- Nightbot Command
+    - Usage: `!age`
+    - Nightbot setup: `$(urlfetch https://api.wynd.is/api/age)`
+
+```sh
+curl -i 'http://127.0.0.1:3000/api/age' -H 'Nightbot-Channel: provider=twitch&name=qiyarah'
+```
