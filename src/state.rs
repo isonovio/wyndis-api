@@ -1,15 +1,15 @@
 use std::{collections::HashMap, sync::Arc};
 
-use super::config;
-use super::sites::faceit::{Client, FaceitNickname};
-use super::sites::twitch::TwitchChannelName;
+use crate::endpoints::faceit::config;
+use crate::sites::faceit::{Client, FaceitNickname};
+use crate::sites::twitch::TwitchChannelName;
 
 pub type Channels = Arc<HashMap<TwitchChannelName, FaceitNickname>>;
 
 #[derive(Clone)]
 pub struct State {
-    pub(super) client: Client,
-    pub(super) channels: Channels,
+    pub(crate) client: Client,
+    pub(crate) channels: Channels,
 }
 
 impl State {

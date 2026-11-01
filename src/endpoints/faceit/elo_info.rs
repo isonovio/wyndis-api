@@ -5,7 +5,7 @@ use std::{
 
 use crate::error::Error;
 
-use super::{
+use crate::sites::faceit::{
     Client,
     ext::{LastMatch, Ranking, Today, day_start},
     models::{FaceitNickname, Match, Player, Region},

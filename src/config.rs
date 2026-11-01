@@ -5,7 +5,7 @@ use std::path::Path;
 use anyhow::{Context, Result};
 use serde::Deserialize;
 
-use crate::faceit;
+use crate::endpoints::faceit;
 use crate::middlewares::rate_limit;
 
 #[derive(Deserialize)]

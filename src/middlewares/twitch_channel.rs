@@ -1,6 +1,6 @@
 use axum::{extract::Request, middleware::Next, response::Response};
 
-use crate::faceit::sites::nightbot::parse_channel;
+use crate::sites::nightbot::parse_channel;
 
 pub async fn extract_twitch_channel(mut request: Request, next: Next) -> Response {
     let channel = parse_channel(request.headers());
@@ -11,7 +11,7 @@ pub async fn extract_twitch_channel(mut request: Request, next: Next) -> Respons
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::faceit::sites::nightbot::TwitchChannel;
+    use crate::sites::nightbot::TwitchChannel;
     use axum::http::StatusCode;
     use axum::{Extension, Router, body::Body, middleware, routing::get};
     use http_body_util::BodyExt;

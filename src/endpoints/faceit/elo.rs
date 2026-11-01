@@ -2,10 +2,12 @@ use axum::{Extension, Router, extract::State as AxumState, middleware, routing::
 
 use crate::error::Error;
 
-use crate::faceit::State;
-use crate::faceit::middlewares::faceit_nickname::extract_faceit_nickname;
-use crate::faceit::middlewares::twitch_channel::extract_twitch_channel;
-use crate::faceit::sites::faceit::{Client, EloInfo, FaceitNickname};
+use crate::middlewares::faceit_nickname::extract_faceit_nickname;
+use crate::middlewares::twitch_channel::extract_twitch_channel;
+use crate::sites::faceit::{Client, FaceitNickname};
+use crate::state::State;
+
+use super::elo_info::EloInfo;
 
 pub fn init(state: State) -> Router {
     Router::new()

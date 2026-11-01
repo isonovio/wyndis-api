@@ -102,7 +102,7 @@ fn metric(value: Option<&str>) -> Option<f64> {
         .filter(|value| value.is_finite() && *value >= 0.0)
 }
 
-pub(super) fn day_start(now: i64, timezone: Tz) -> Result<i64, Error> {
+pub(crate) fn day_start(now: i64, timezone: Tz) -> Result<i64, Error> {
     let local = DateTime::<Utc>::from_timestamp(now, 0)
         .ok_or_else(|| Error::bad_gateway("Invalid timestamp"))?
         .with_timezone(&timezone);

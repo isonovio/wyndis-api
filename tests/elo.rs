@@ -9,11 +9,7 @@ use axum::{
 use http_body_util::BodyExt;
 use serde_json::json;
 use tower::ServiceExt;
-use wyndis_api::{
-    faceit::{State, sites::faceit::Client},
-    middlewares::rate_limit,
-    routes::compose,
-};
+use wyndis_api::{middlewares::rate_limit, routes::compose, sites::faceit::Client, state::State};
 
 const OWNER: &str = "channel_player";
 const OTHER: &str = "donk666";

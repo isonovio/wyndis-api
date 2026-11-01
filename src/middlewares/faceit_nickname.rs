@@ -8,9 +8,9 @@ use serde::Deserialize;
 
 use crate::error::Error;
 
-use crate::faceit::sites::faceit::FaceitNickname;
-use crate::faceit::sites::nightbot::TwitchChannel;
-use crate::faceit::state::Channels;
+use crate::sites::faceit::FaceitNickname;
+use crate::sites::nightbot::TwitchChannel;
+use crate::state::Channels;
 
 #[derive(Deserialize)]
 struct NicknameQuery {
@@ -50,7 +50,7 @@ mod tests {
     use http_body_util::BodyExt;
     use tower::ServiceExt;
 
-    use crate::faceit::middlewares::twitch_channel;
+    use crate::middlewares::twitch_channel;
 
     use super::*;
 

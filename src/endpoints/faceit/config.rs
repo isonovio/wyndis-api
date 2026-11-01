@@ -2,8 +2,8 @@ use std::collections::HashMap;
 
 use serde::{Deserialize, Deserializer, de::Error};
 
-use super::sites::faceit::FaceitNickname;
-use super::sites::twitch::TwitchChannelName;
+use crate::sites::faceit::FaceitNickname;
+use crate::sites::twitch::TwitchChannelName;
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
