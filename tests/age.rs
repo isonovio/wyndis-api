@@ -2,27 +2,29 @@ use axum::{
     body::Body,
     http::{Request, StatusCode},
 };
-use chrono::Utc;
 use http_body_util::BodyExt;
+use jiff::{Timestamp, tz::TimeZone};
 use tower::ServiceExt;
 use wyndis_api::{config::Config, routes, state::State};
 
 #[tokio::test]
 async fn age_uses_person_middleware_and_returns_plain_text() {
-    let now = Utc::now();
-    let birthday = now.format("2000-%m-%d");
+    let now = Timestamp::now().to_zoned(TimeZone::UTC);
+    let birthday = now.strftime("2000-%m-%d");
     let config: Config = toml::from_str(&format!(
-        "bind_addr = '127.0.0.1:3000'\n[rate_limit.global]\nrequests_per_minute = 1000\nburst = 100\n[rate_limit.faceit]\nrequests_per_minute = 2\nburst = 1\n[[persons]]\nid = 'owner'\ntwitch_channel = 'streamer'\nbirthday = {birthday}\n[[persons]]\nid = 'missing'\ntwitch_channel = 'missing'\n[[persons]]\nid = 'future'\ntwitch_channel = 'future'\nbirthday = 9999-01-01"
+        "bind_addr = '127.0.0.1:3000'\n[rate_limit.global]\nrequests_per_minute = 1000\nburst = 100\n[rate_limit.faceit]\nrequests_per_minute = 2\nburst = 1\n[[persons]]\nid = 'owner'\ntwitch_channel = 'streamer'\nbirthday = {birthday}\n[[persons]]\nid = 'missing'\ntwitch_channel = 'missing'\n[[persons]]\nid = 'future'\ntwitch_channel = 'future'\nbirthday = 9999-01-01\n[[persons]]\nid = 'invalid-midnight'\ntwitch_channel = 'invalid_midnight'\nbirthday = 2018-11-04\ntimezone = 'America/Sao_Paulo'"
     )).unwrap();
     let app = routes::compose(State::new(config.persons).unwrap(), config.rate_limit);
     for (header, status, expected) in [
         (
+            Some("provider=twitch&name=invalid_midnight"),
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Unable to calculate age".into(),
+        ),
+        (
             Some("provider=twitch&name=STREAMER"),
             StatusCode::OK,
-            format!(
-                " 🥳 I am {} 🎂 Today is my 🎈BIRTHDAY🎉",
-                chrono::Datelike::year(&now) - 2000
-            ),
+            format!(" 🥳 I am {} 🎂 Today is my 🎈BIRTHDAY🎉", now.year() - 2000),
         ),
         (
             None,

@@ -48,6 +48,10 @@ curl -i 'http://127.0.0.1:3000/api/faceit/elo' -H 'Nightbot-Channel: provider=tw
 - Nightbot Command
     - Usage: `!age`
     - Nightbot setup: `$(urlfetch https://api.wynd.is/api/age)`
+    - Result:
+        - Normally: `I am 26 years 2 months 3 days 5 hours 6 minutes 7 seconds old.`
+        - Within one calendar month of the next birthday: `I will be 27 years old in 1 day 2 hours! 🥳`
+        - Birthday: ` 🥳 I am 27 🎂 Today is my 🎈BIRTHDAY🎉`
 
 ```sh
 curl -i 'http://127.0.0.1:3000/api/age' -H 'Nightbot-Channel: provider=twitch&name=qiyarah'

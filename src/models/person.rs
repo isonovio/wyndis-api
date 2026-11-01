@@ -1,13 +1,12 @@
 use std::collections::HashMap;
 
-use chrono::NaiveDate;
-use chrono_tz::Tz;
+use jiff::{civil::Date, tz::TimeZone};
 use serde::Deserialize;
 
 use crate::sites::faceit;
 use crate::sites::twitch::TwitchChannelName;
 
-use super::utils::{naive_date, slug};
+use super::utils::{civil_date, slug};
 
 #[derive(Clone, Debug, Deserialize)]
 #[serde(try_from = "PersonConfig")]
@@ -15,8 +14,8 @@ pub struct Person {
     pub id: String,
     pub twitch_channel: Option<String>,
     pub faceit_nickname: Option<faceit::Nickname>,
-    pub birthday: Option<NaiveDate>,
-    pub timezone: Option<Tz>,
+    pub birthday: Option<Date>,
+    pub timezone: Option<TimeZone>,
 }
 
 #[derive(Deserialize)]
@@ -26,7 +25,8 @@ struct PersonConfig {
     twitch_channel: Option<TwitchChannelName>,
     faceit_nickname: Option<faceit::Nickname>,
     birthday: Option<toml::value::Datetime>,
-    timezone: Option<Tz>,
+    #[serde(default, with = "jiff::fmt::serde::tz::optional")]
+    timezone: Option<TimeZone>,
 }
 
 impl TryFrom<PersonConfig> for Person {
@@ -39,7 +39,7 @@ impl TryFrom<PersonConfig> for Person {
             faceit_nickname: config.faceit_nickname,
             birthday: config
                 .birthday
-                .map(|d| naive_date(d).ok_or("Invalid birthday".to_owned()))
+                .map(|d| civil_date(d).ok_or("Invalid birthday".to_owned()))
                 .transpose()?,
             timezone: config.timezone,
         })

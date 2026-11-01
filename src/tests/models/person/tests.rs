@@ -32,8 +32,11 @@ fn dates_timezones_and_site_names_are_loaded() {
         person.faceit_nickname.as_ref().unwrap().to_string(),
         "Donk666"
     );
-    assert_eq!(person.birthday, NaiveDate::from_ymd_opt(2000, 2, 29));
-    assert_eq!(person.timezone, Some(chrono_tz::America::New_York));
+    assert_eq!(person.birthday, Date::new(2000, 2, 29).ok());
+    assert_eq!(
+        person.timezone,
+        Some(TimeZone::get("America/New_York").unwrap())
+    );
 }
 
 #[test]
@@ -62,15 +65,15 @@ fn birthday_and_optional_timezone_are_stored_separately() {
         ("birthday = 2000-01-31", None),
         (
             "timezone = 'America/New_York'\nbirthday = 2000-01-31",
-            Some(chrono_tz::America::New_York),
+            Some(TimeZone::get("America/New_York").unwrap()),
         ),
         (
             "birthday = 2000-01-31\ntimezone = 'UTC'",
-            Some(chrono_tz::UTC),
+            Some(TimeZone::UTC),
         ),
     ] {
         let person: Person = toml::from_str(&format!("id = 'owner'\n{fields}")).unwrap();
-        assert_eq!(person.birthday, NaiveDate::from_ymd_opt(2000, 1, 31));
+        assert_eq!(person.birthday, Date::new(2000, 1, 31).ok());
         assert_eq!(person.timezone, timezone);
     }
 }

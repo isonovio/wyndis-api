@@ -1,62 +1,81 @@
 use std::fmt;
 
-use chrono::{DateTime, Datelike, NaiveDate, Utc};
+use jiff::{
+    Timestamp, ToSpan, Zoned,
+    civil::Date,
+    tz::{AmbiguousOffset, TimeZone},
+};
 
-use crate::error::Error;
-use crate::models::Person;
+use super::offset::Offset;
 
 pub(super) struct Age {
-    today: NaiveDate,
-    birthday: NaiveDate,
+    birth: Zoned,
+    now: Zoned,
 }
 
 impl Age {
-    pub(super) fn at(person: &Person, now: DateTime<Utc>) -> Result<Self, Error> {
-        let birthday = person
-            .birthday
-            .ok_or_else(|| Error::not_found("Missing birthday"))?;
-        let today = now
-            .with_timezone(&person.timezone.unwrap_or(chrono_tz::UTC))
-            .date_naive();
-        Self::from_dates(birthday, today)
+    pub(super) fn at(birthday: Date, now: Timestamp, tz: TimeZone) -> Option<Self> {
+        let birth = midnight(birthday, tz.clone())?;
+        let now = now.to_zoned(tz);
+        (birth <= now).then_some(Self { birth, now })
     }
 
-    fn from_dates(birthday: NaiveDate, today: NaiveDate) -> Result<Self, Error> {
-        if birthday > today {
-            return Err(Error::bad_request("Birthday is in the future"));
-        }
-        if today.year() == NaiveDate::MAX.year() {
-            return Err(Error::internal_server_error("Invalid anniversary date"));
-        }
-        Ok(Self { today, birthday })
+    fn anniversary(&self, year: i16) -> Option<Date> {
+        let years = (year - self.birth.year()).years();
+        self.birth.date().checked_add(years).ok()
     }
 
-    fn anniversary(&self, year: i32) -> NaiveDate {
-        self.birthday
-            .with_year(year)
-            .or_else(|| NaiveDate::from_ymd_opt(year, 2, 28))
-            .expect("anniversary year is within the validated date range")
+    fn next_birthday(&self) -> Option<Zoned> {
+        let mut year = self.now.year();
+        if self.anniversary(year)? < self.now.date() {
+            year = year.checked_add(1)?;
+        };
+        midnight(self.anniversary(year)?, self.now.time_zone().clone())
+    }
+
+    pub(super) fn message(&self) -> Option<Message> {
+        let today = self.now.date();
+        let next = self.next_birthday()?;
+        let years = next.year() - self.birth.year();
+        let countdown_start = next.date().checked_sub(1.month()).ok()?;
+        match today == next.date() {
+            true => Some(Message::Birthday { years }),
+            false => match today >= countdown_start {
+                true => Some(Message::Upcoming {
+                    years,
+                    countdown: Offset::by_days(&self.now, &next)?,
+                }),
+                false => Some(Message::Elapsed(Offset::by_years(&self.birth, &self.now)?)),
+            },
+        }
     }
 }
 
-impl fmt::Display for Age {
+pub(super) enum Message {
+    Birthday { years: i16 },
+    Upcoming { years: i16, countdown: Offset },
+    Elapsed(Offset),
+}
+
+impl fmt::Display for Message {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let this_year = self.anniversary(self.today.year());
-        let next_birthday = self.anniversary(self.today.year() + i32::from(this_year < self.today));
-        let years = next_birthday.year() - self.birthday.year();
-        match (next_birthday - self.today).num_days() {
-            0 => write!(f, " 🥳 I am {years} 🎂 Today is my 🎈BIRTHDAY🎉"),
-            1 => write!(f, "I will be {years} tomorrow! 🥳"),
-            days @ 2..=7 => write!(f, "I will be {years} in {days} days! 🥳"),
-            _ => {
-                let previous_birthday = self.anniversary(next_birthday.year() - 1);
-                let elapsed_days = (self.today - previous_birthday).num_days();
-                let year_days = (next_birthday - previous_birthday).num_days();
-                let age = (years - 1) as f64 + elapsed_days as f64 / year_days as f64;
-                let number = format!("{age:.4}");
-                f.write_str(number.trim_end_matches('0').trim_end_matches('.'))
-            }
+        match self {
+            Self::Birthday { years } => write!(f, " 🥳 I am {years} 🎂 Today is my 🎈BIRTHDAY🎉"),
+            Self::Upcoming { years, countdown } => write!(
+                f,
+                "I will be {years} {} old in {countdown}! 🥳",
+                if *years == 1 { "year" } else { "years" }
+            ),
+            Self::Elapsed(offset) => write!(f, "I am {offset} old."),
         }
+    }
+}
+
+fn midnight(date: Date, timezone: TimeZone) -> Option<Zoned> {
+    let midnight = timezone.to_ambiguous_zoned(date.at(0, 0, 0, 0));
+    match midnight.offset() {
+        AmbiguousOffset::Gap { .. } => None,
+        _ => midnight.earlier().ok(),
     }
 }
 
