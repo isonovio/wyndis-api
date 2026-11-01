@@ -8,8 +8,12 @@ use http_body_util::BodyExt;
 use serde_json::json;
 use tower::ServiceExt;
 use wyndis_api::{
-    config::Config, middlewares::rate_limit, models::Persons, routes::compose,
-    sites::faceit::Client, state::State,
+    config::{Config, RateLimits},
+    middlewares::rate_limit,
+    models::Persons,
+    routes::compose,
+    sites::faceit::Client,
+    state::State,
 };
 
 const OWNER: &str = "channel_player";
@@ -22,9 +26,12 @@ fn persons() -> Persons {
 fn app(state: State) -> Router {
     compose(
         state,
-        rate_limit::Config {
-            requests_per_minute: std::num::NonZeroU32::new(1000).unwrap(),
-            burst: std::num::NonZeroU32::new(100).unwrap(),
+        RateLimits {
+            elo: rate_limit::Config {
+                requests_per_minute: std::num::NonZeroU32::new(1000).unwrap(),
+                burst: std::num::NonZeroU32::new(100).unwrap(),
+            },
+            ..Default::default()
         },
     )
 }

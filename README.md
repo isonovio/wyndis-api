@@ -24,6 +24,8 @@ cargo clippy --all-targets -- -D warnings
 
 #### Endpoint `GET /api/faceit/elo?id=donk666`
 
+- Rate limit: 1/30s
+
 - Nightbot Command
     - Usage: `!elo` / `!elo donk666`
     - Setup: `$(urlfetch https://api.wynd.is/api/faceit/elo?id=$(querystring))`
@@ -40,6 +42,8 @@ curl -i 'http://127.0.0.1:3000/api/faceit/elo' -H 'Nightbot-Channel: provider=tw
 ### Age
 
 #### Endpoint `GET /api/age`
+
+- Rate limit: 1/s
 
 - Nightbot Command
     - Usage: `!age`

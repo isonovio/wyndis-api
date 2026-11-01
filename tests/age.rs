@@ -12,7 +12,7 @@ async fn age_uses_person_middleware_and_returns_plain_text() {
     let now = Utc::now();
     let birthday = now.format("2000-%m-%d");
     let config: Config = toml::from_str(&format!(
-        "bind_addr = '127.0.0.1:3000'\n[rate_limit]\nrequests_per_minute = 1000\nburst = 100\n[[persons]]\nid = 'owner'\ntwitch_channel = 'streamer'\nbirthday = {birthday}\n[[persons]]\nid = 'missing'\ntwitch_channel = 'missing'\n[[persons]]\nid = 'future'\ntwitch_channel = 'future'\nbirthday = 9999-01-01"
+        "bind_addr = '127.0.0.1:3000'\n[rate_limit.age]\nrequests_per_minute = 1000\nburst = 100\n[[persons]]\nid = 'owner'\ntwitch_channel = 'streamer'\nbirthday = {birthday}\n[[persons]]\nid = 'missing'\ntwitch_channel = 'missing'\n[[persons]]\nid = 'future'\ntwitch_channel = 'future'\nbirthday = 9999-01-01"
     )).unwrap();
     let app = routes::compose(State::new(config.persons).unwrap(), config.rate_limit);
     for (header, status, expected) in [

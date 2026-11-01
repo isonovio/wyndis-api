@@ -12,10 +12,16 @@ use crate::models::Persons;
 #[serde(deny_unknown_fields)]
 pub struct Config {
     pub bind_addr: SocketAddr,
-    #[serde(default)]
-    pub rate_limit: rate_limit::Config,
+    pub rate_limit: RateLimits,
     #[serde(default)]
     pub persons: Persons,
+}
+
+#[derive(Clone, Copy, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RateLimits {
+    pub elo: rate_limit::Config,
+    pub age: rate_limit::Config,
 }
 
 impl Config {
