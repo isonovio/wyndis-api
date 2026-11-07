@@ -1,5 +1,6 @@
 use std::sync::{Arc, Mutex};
 use std::thread;
+use std::time::Duration;
 
 use obscura::Browser;
 use serde::de::DeserializeOwned;
@@ -56,6 +57,10 @@ impl Client {
         })
     }
 
+    pub fn request_timeout(&self) -> Duration {
+        self.inner.config.request_timeout()
+    }
+
     pub async fn fetch<T: DeserializeOwned>(
         &self,
         path: &str,
@@ -81,10 +86,9 @@ impl Client {
     async fn request(&self, url: Url) -> Result<Value, Error> {
         let (reply, response) = oneshot::channel();
         tokio::time::timeout(self.inner.config.request_timeout(), async {
+            let request = Request { url, reply };
             self.inner
-                .send(Request { url, reply }, || {
-                    Connection::spawn(self.inner.config)
-                })
+                .send(request, || Connection::spawn(self.inner.config))
                 .await?;
             response.await.map_err(|_| unavailable())?
         })

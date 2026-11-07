@@ -230,3 +230,46 @@ async fn upstream_errors_are_safe_plain_text() {
         assert!(!body.contains("secret"));
     }
 }
+
+#[tokio::test]
+async fn timeout_bounds_the_complete_elo_computation() {
+    use std::time::Duration;
+
+    let upstream = Router::new()
+        .route(
+            "/users/v1/nicknames/{nickname}",
+            get(|| async {
+                tokio::time::sleep(Duration::from_secs(1)).await;
+                let mut body = player();
+                body["id"] = json!("00000000-0000-0000-0000-000000000001");
+                axum::Json(json!({"payload": body}))
+            }),
+        )
+        .route(
+            "/ranking/v1/globalranking/cs2/EU/{id}",
+            get(std::future::pending::<StatusCode>),
+        )
+        .route(
+            "/stats/v1/stats/time/users/{id}/games/cs2",
+            get(|| async { axum::Json(json!([])) }),
+        );
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let url = format!("http://{}/", listener.local_addr().unwrap());
+    let _mock = MockServer(tokio::spawn(async move {
+        axum::serve(listener, upstream).await.unwrap();
+    }));
+    let config = toml::from_str("request_timeout_secs = 2\nsettle_timeout_ms = 0").unwrap();
+    let client = Client::with_base_url(url.parse().unwrap(), config).unwrap();
+    let (status, body) = tokio::time::timeout(
+        Duration::from_millis(2750),
+        request(
+            app(State::with_client(client, persons())),
+            &format!("/api/faceit/elo?id={OTHER}"),
+            None,
+        ),
+    )
+    .await
+    .expect("the total timeout must not restart after player lookup");
+    assert_eq!(status, StatusCode::GATEWAY_TIMEOUT);
+    assert_eq!(body, "FACEIT request timed out");
+}

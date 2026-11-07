@@ -13,6 +13,12 @@ async fn elo(
     State(client): State<Client>,
     Extension(nickname): Extension<Nickname>,
 ) -> Result<String, Error> {
-    let player = Player::fetch(&client, &nickname).await?;
-    Ok(EloInfo::fetch(&client, &player).await?.to_string())
+    tokio::time::timeout(client.request_timeout(), fetch(&client, &nickname))
+        .await
+        .map_err(|_| Error::gateway_timeout("FACEIT request timed out"))?
+}
+
+async fn fetch(client: &Client, nickname: &Nickname) -> Result<String, Error> {
+    let player = Player::fetch(client, nickname).await?;
+    Ok(EloInfo::fetch(client, &player).await?.to_string())
 }

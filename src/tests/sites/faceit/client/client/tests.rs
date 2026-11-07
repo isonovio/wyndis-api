@@ -150,3 +150,53 @@ async fn request_uses_configured_timeout_while_waiting_for_worker() {
         axum::http::StatusCode::GATEWAY_TIMEOUT
     );
 }
+
+#[tokio::test]
+async fn outer_timeout_cancels_history_pagination() {
+    use crate::sites::faceit::models::Match;
+    use jiff::Timestamp;
+    use std::time::Duration;
+
+    let (requests, mut receiver) = mpsc::channel::<Request>(1);
+    let client = Client {
+        inner: Arc::new(ClientInner {
+            config: Config::default(),
+            base_url: Url::parse("https://api.faceit.com/").unwrap(),
+            connection: tokio::sync::Mutex::new(Connection {
+                requests: Some(requests),
+                handle: None,
+            }),
+        }),
+    };
+    let worker = async {
+        let first = receiver.recv().await.unwrap();
+        assert!(first.url.query().unwrap().contains("page=0"));
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        let history: Vec<_> = (0..30)
+            .map(|id| {
+                serde_json::json!({
+                    "matchId": id.to_string(), "matchRound": "1", "date": 1000,
+                    "status": "APPLIED", "i10": "1", "c5": "13", "i18": "13 / 8"
+                })
+            })
+            .collect();
+        first.reply.send(Ok(serde_json::json!(history))).unwrap();
+        let mut second = receiver.recv().await.unwrap();
+        assert!(second.url.query().unwrap().contains("page=1"));
+        tokio::time::timeout(Duration::from_secs(2), second.reply.closed())
+            .await
+            .unwrap();
+        assert!(matches!(
+            receiver.try_recv(),
+            Err(mpsc::error::TryRecvError::Empty)
+        ));
+    };
+    let fetch = Match::fetch(
+        &client,
+        uuid::Uuid::nil(),
+        Timestamp::UNIX_EPOCH,
+        Timestamp::MAX,
+    );
+    let (result, ()) = tokio::join!(tokio::time::timeout(Duration::from_secs(1), fetch), worker);
+    assert!(result.is_err());
+}

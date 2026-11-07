@@ -33,10 +33,8 @@ pub struct Ranking {
 
 impl Ranking {
     pub async fn fetch(client: &Client, id: Uuid, region: &Region) -> Result<Self, Error> {
-        match client
-            .fetch::<u32>(&format!("ranking/v1/globalranking/cs2/{region}/{id}"), &[])
-            .await
-        {
+        let url = format!("ranking/v1/globalranking/cs2/{region}/{id}");
+        match client.fetch::<u32>(&url, &[]).await {
             Ok(position) => Ok(Self {
                 position: Some(position).filter(|position| *position > 0),
             }),

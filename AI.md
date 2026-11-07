@@ -47,7 +47,7 @@ Implement one checkpoint at a time, validate it, and stop for review. Do not com
 
 ## Operational details
 
-- FACEIT timeout bounds each upstream operation, including client queue wait; the worker also applies a timeout while processing. It is not an end-to-end Elo deadline.
+- Elo wraps the complete computation on a cache miss in one Tokio timeout using `[faceit.client].request_timeout_secs` (20 seconds by default), covering player lookup, ranking, and all history pages together. Expiry returns HTTP 504. Client and worker timeouts remain per-operation safeguards; dropping a pending request closes its reply receiver so the worker cancels that fetch. Concurrent cache followers share the initializer’s deadline.
 - Browser settling returns when idle or when the configured maximum is reached; it is not a mandatory fixed sleep.
 - History pagination permits 34 pages of 30 records. Exceeding the cap without completing the requested history returns an error rather than partial daily statistics.
 - Nickname URL construction must remove the trailing empty path segment before appending the escaped nickname, avoiding `/users/v1/nicknames//<nickname>`.
