@@ -17,7 +17,7 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             ttl: Duration::from_secs(30),
-            max_entries: NonZeroU64::new(256).unwrap(),
+            max_entries: NonZeroU64::new(256).expect("nonzero"),
         }
     }
 }

@@ -15,7 +15,7 @@ pub struct CacheLayer<K, V> {
 
 impl<K: RequestKey, V: CachedValue> CacheLayer<K, V> {
     pub fn new(ttl: Duration) -> Self {
-        Self::with_capacity(ttl, NonZeroU64::new(256).unwrap())
+        Self::with_capacity(ttl, NonZeroU64::new(256).expect("nonzero"))
     }
 
     pub fn with_capacity(ttl: Duration, max_entries: NonZeroU64) -> Self {

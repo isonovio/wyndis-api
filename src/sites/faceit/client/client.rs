@@ -110,7 +110,9 @@ impl ClientInner {
         request: Request,
         spawn: impl FnOnce() -> anyhow::Result<Connection>,
     ) -> Result<(), Error> {
-        let requests = (self.connection.lock().await.requests.as_ref().unwrap()).clone();
+        let requests = (self.connection.lock().await.requests.as_ref())
+            .expect("the request sender is removed only during drop")
+            .clone();
         let request = match requests.send(request).await {
             Ok(()) => return Ok(()),
             Err(error) => error.0,
@@ -127,12 +129,17 @@ impl ClientInner {
         spawn: impl FnOnce() -> anyhow::Result<Connection>,
     ) -> Result<mpsc::Sender<Request>, Error> {
         let mut connection = self.connection.lock().await;
-        if connection.requests.as_ref().unwrap().same_channel(requests) {
+        if (connection.requests.as_ref())
+            .expect("the request sender is removed only during drop")
+            .same_channel(requests)
+        {
             *connection = spawn()
                 .inspect_err(|error| error!(%error, "Failed to restart FACEIT worker"))
                 .map_err(|_| unavailable())?;
         }
-        Ok(connection.requests.as_ref().unwrap().clone())
+        Ok((connection.requests.as_ref())
+            .expect("the request sender is removed only during drop")
+            .clone())
     }
 }
 
@@ -204,7 +211,9 @@ impl Worker {
         let target = url.clone();
         page.on_response(Arc::new(move |_, response| {
             if response.url == target {
-                *captured.lock().unwrap() = Some((response.status, response.body.clone()));
+                *(captured.lock())
+                    .expect("response storage must not be poisoned by a prior panic") =
+                    Some((response.status, response.body.clone()));
             }
         }));
         (page.goto(url.as_str()).await)
@@ -212,7 +221,9 @@ impl Worker {
             .map_err(|_| unavailable())?;
         page.settle(self.config.settle_timeout().as_millis() as u64)
             .await;
-        let (status, body) = (response.lock().unwrap().take())
+        let (status, body) = (response.lock())
+            .expect("response storage must not be poisoned by a prior panic")
+            .take()
             .ok_or_else(|| warn!(%url, "FACEIT response missing"))
             .map_err(|_| unavailable())?;
         match status {

@@ -23,8 +23,8 @@ pub struct Config {
 impl Default for Config {
     fn default() -> Self {
         Self {
-            requests_per_minute: NonZeroU32::new(60).unwrap(),
-            burst: NonZeroU32::new(1).unwrap(),
+            requests_per_minute: NonZeroU32::new(60).expect("nonzero"),
+            burst: NonZeroU32::new(1).expect("nonzero"),
         }
     }
 }
@@ -36,7 +36,7 @@ pub fn layer(config: Config) -> GovernorLayer<GlobalKeyExtractor, NoOpMiddleware
         .burst_size(config.burst.get())
         .key_extractor(GlobalKeyExtractor)
         .finish()
-        .expect("rate limit values are nonzero");
+        .expect("nonzero burst and u32 request rate guarantee a nonzero period");
     GovernorLayer::new(governor).error_handler(error_response)
 }
 

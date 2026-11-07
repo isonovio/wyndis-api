@@ -37,10 +37,13 @@ struct RawConfig {
 
 impl Default for RawConfig {
     fn default() -> Self {
-        let config = Config::default();
+        let Config {
+            request_timeout,
+            settle_timeout,
+        } = Config::default();
         Self {
-            request_timeout_secs: NonZeroU64::new(config.request_timeout.as_secs()).unwrap(),
-            settle_timeout_ms: config.settle_timeout.as_millis() as u64,
+            request_timeout_secs: NonZeroU64::new(request_timeout.as_secs()).expect("nonzero"),
+            settle_timeout_ms: settle_timeout.as_millis() as u64,
         }
     }
 }
