@@ -6,6 +6,8 @@ use axum::{
 
 use super::kv::CachedValue;
 
+const MAX_BUFFERED_RESPONSE_BYTES: usize = 64 * 1024;
+
 #[derive(Clone)]
 pub struct BufferedResponse {
     status: StatusCode,
@@ -16,7 +18,7 @@ pub struct BufferedResponse {
 impl BufferedResponse {
     pub async fn read(response: Response) -> Self {
         let (parts, body) = response.into_parts();
-        match to_bytes(body, 64 * 1024).await {
+        match to_bytes(body, MAX_BUFFERED_RESPONSE_BYTES).await {
             Ok(body) => Self {
                 status: parts.status,
                 headers: parts.headers,

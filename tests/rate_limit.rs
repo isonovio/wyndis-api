@@ -5,7 +5,7 @@ use axum::{
 };
 use http_body_util::BodyExt;
 use tower::ServiceExt;
-use wyndis_api::{config::Config, routes, sites::faceit::Client, state::State};
+use wyndis_api::{config::Config, routes, sites::faceit::client::Client, state::State};
 
 fn config() -> Config {
     Config::load(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("config.toml")).unwrap()
@@ -21,9 +21,13 @@ async fn request(app: &Router, path: &str) -> axum::response::Response {
 #[tokio::test]
 async fn global_budget_covers_all_routes_and_fallback() {
     let mut config = config();
-    config.rate_limit.global.requests_per_minute = 60.try_into().unwrap();
-    config.rate_limit.global.burst = 1.try_into().unwrap();
-    let app = routes::compose(State::new(config.persons).unwrap(), config.rate_limit);
+    config.global.rate_limit.requests_per_minute = 60.try_into().unwrap();
+    config.global.rate_limit.burst = 1.try_into().unwrap();
+    let app = routes::compose(
+        State::new(config.persons, config.faceit.client).unwrap(),
+        config.global,
+        config.faceit,
+    );
     assert_eq!(
         request(&app, "/missing").await.status(),
         StatusCode::NOT_FOUND
@@ -38,7 +42,7 @@ async fn global_budget_covers_all_routes_and_fallback() {
 #[tokio::test]
 async fn faceit_budget_precedes_upstream_work_and_does_not_limit_age() {
     let mut config = config();
-    config.rate_limit.global.burst = 100.try_into().unwrap();
+    config.global.rate_limit.burst = 100.try_into().unwrap();
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let base_url = format!("http://{}/", listener.local_addr().unwrap());
     let server = tokio::spawn(async move {
@@ -49,10 +53,11 @@ async fn faceit_budget_precedes_upstream_work_and_does_not_limit_age() {
         .await
         .unwrap();
     });
-    let client = Client::with_base_url(base_url.parse().unwrap()).unwrap();
+    let client = Client::with_base_url(base_url.parse().unwrap(), config.faceit.client).unwrap();
     let app = routes::compose(
         State::with_client(client, config.persons),
-        config.rate_limit,
+        config.global,
+        config.faceit,
     );
     assert_eq!(
         request(&app, "/api/faceit/elo").await.status(),

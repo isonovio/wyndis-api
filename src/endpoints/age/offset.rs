@@ -5,6 +5,10 @@ use jiff::{
     civil::{DateTime, DateTimeDifference},
 };
 
+const SECONDS_PER_MINUTE: i64 = 60;
+const SECONDS_PER_HOUR: i64 = 60 * SECONDS_PER_MINUTE;
+const SECONDS_PER_DAY: i64 = 24 * SECONDS_PER_HOUR;
+
 pub(super) struct Offset(Span);
 
 impl Offset {
@@ -39,10 +43,10 @@ impl Offset {
         let seconds = duration.as_secs() + i64::from(duration.subsec_nanos() > 0);
         Some(Self(
             Span::new()
-                .days(seconds / 86_400)
-                .hours(seconds % 86_400 / 3_600)
-                .minutes(seconds % 3_600 / 60)
-                .seconds(seconds % 60),
+                .days(seconds / SECONDS_PER_DAY)
+                .hours(seconds % SECONDS_PER_DAY / SECONDS_PER_HOUR)
+                .minutes(seconds % SECONDS_PER_HOUR / SECONDS_PER_MINUTE)
+                .seconds(seconds % SECONDS_PER_MINUTE),
         ))
     }
 }

@@ -15,7 +15,7 @@ use super::*;
 
 #[tokio::test]
 async fn resolves_person_without_requiring_faceit_data() {
-    let config: Config = toml::from_str("bind_addr = '127.0.0.1:3000'\n[rate_limit.global]\nrequests_per_minute = 600\nburst = 100\n[rate_limit.faceit]\nrequests_per_minute = 2\nburst = 1\n[[persons]]\nid = 'internal-owner'\ntwitch_channel = 'Streamer'").unwrap();
+    let config: Config = toml::from_str("bind_addr = '127.0.0.1:3000'\n[global.rate_limit]\nrequests_per_minute = 600\nburst = 100\n[faceit.rate_limit]\nrequests_per_minute = 2\nburst = 1\n[[persons]]\nid = 'internal-owner'\ntwitch_channel = 'Streamer'").unwrap();
     let app = Router::new()
         .route(
             "/",

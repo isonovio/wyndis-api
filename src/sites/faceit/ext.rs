@@ -6,7 +6,7 @@ use uuid::Uuid;
 use crate::error::Error;
 
 use super::{
-    Client,
+    client::Client,
     models::{Match, Region, invalid_data},
 };
 

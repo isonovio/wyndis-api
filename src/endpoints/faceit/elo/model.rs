@@ -6,7 +6,7 @@ use std::{
 use crate::error::Error;
 
 use crate::sites::faceit::{
-    Client,
+    client::Client,
     ext::{LastMatch, Ranking, Today, day_start},
     models::{Match, Player, Region},
 };

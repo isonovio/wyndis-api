@@ -6,7 +6,11 @@ use uuid::Uuid;
 
 use crate::error::Error;
 
-use super::Client;
+use super::client::Client;
+
+const MAX_NICKNAME_BYTES: usize = 64;
+const MAX_HISTORY_PAGES: u32 = 34;
+const HISTORY_PAGE_SIZE: usize = 30;
 
 #[derive(Debug, Deserialize)]
 pub struct Player {
@@ -53,7 +57,7 @@ impl TryFrom<String> for Nickname {
 
     fn try_from(nickname: String) -> Result<Self, Self::Error> {
         if nickname.is_empty()
-            || nickname.len() > 64
+            || nickname.len() > MAX_NICKNAME_BYTES
             || nickname
                 .chars()
                 .any(|c| c.is_whitespace() || c.is_control())
@@ -112,14 +116,17 @@ impl Match {
     ) -> Result<Vec<Self>, Error> {
         let mut matches = Vec::new();
         let mut seen = HashSet::new();
-        for page in 0..=33 {
+        for page in 0..MAX_HISTORY_PAGES {
             let history: Vec<Self> = client
                 .fetch(
                     &format!("stats/v1/stats/time/users/{id}/games/cs2"),
-                    &[("page", page.to_string()), ("size", "30".into())],
+                    &[
+                        ("page", page.to_string()),
+                        ("size", HISTORY_PAGE_SIZE.to_string()),
+                    ],
                 )
                 .await?;
-            let done = history.len() < 30
+            let done = history.len() < HISTORY_PAGE_SIZE
                 || history
                     .iter()
                     .any(|game| game.date.div_euclid(1000) < start);

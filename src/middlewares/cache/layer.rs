@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::{num::NonZeroU64, time::Duration};
 
 use moka::future::Cache;
 use tower::Layer;
@@ -15,8 +15,15 @@ pub struct CacheLayer<K, V> {
 
 impl<K: RequestKey, V: CachedValue> CacheLayer<K, V> {
     pub fn new(ttl: Duration) -> Self {
+        Self::with_capacity(ttl, NonZeroU64::new(256).unwrap())
+    }
+
+    pub fn with_capacity(ttl: Duration, max_entries: NonZeroU64) -> Self {
         Self {
-            cache: Cache::builder().max_capacity(256).time_to_live(ttl).build(),
+            cache: Cache::builder()
+                .max_capacity(max_entries.get())
+                .time_to_live(ttl)
+                .build(),
         }
     }
 }

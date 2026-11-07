@@ -7,6 +7,7 @@ async fn closed_worker_is_replaced_once_for_concurrent_requests() {
     let (requests, receiver) = mpsc::channel(1);
     drop(receiver);
     let inner = ClientInner {
+        config: Config::default(),
         base_url: Url::parse("https://api.faceit.com/").unwrap(),
         connection: tokio::sync::Mutex::new(Connection {
             requests: Some(requests),
@@ -57,6 +58,7 @@ async fn failed_restart_returns_an_error_and_allows_another_attempt() {
     let (requests, receiver) = mpsc::channel(1);
     drop(receiver);
     let inner = ClientInner {
+        config: Config::default(),
         base_url: Url::parse("https://api.faceit.com/").unwrap(),
         connection: tokio::sync::Mutex::new(Connection {
             requests: Some(requests),
@@ -94,6 +96,7 @@ fn last_client_clone_closes_and_joins_the_worker() {
     });
     let client = Client {
         inner: Arc::new(ClientInner {
+            config: Config::default(),
             base_url: Url::parse("https://api.faceit.com/").unwrap(),
             connection: tokio::sync::Mutex::new(Connection {
                 requests: Some(requests),
@@ -120,4 +123,30 @@ fn fetch_shapes_accept_envelopes_and_plain_arrays() {
     );
     assert!(deserialize::<u32>(serde_json::json!({"payload": null})).is_err());
     assert!(deserialize::<u32>(serde_json::json!({"code": "ERROR"})).is_err());
+}
+
+#[tokio::test]
+async fn request_uses_configured_timeout_while_waiting_for_worker() {
+    let (requests, _receiver) = mpsc::channel(1);
+    let config = toml::from_str("request_timeout_secs = 1\nsettle_timeout_ms = 0").unwrap();
+    let client = Client {
+        inner: Arc::new(ClientInner {
+            config,
+            base_url: Url::parse("https://api.faceit.com/").unwrap(),
+            connection: tokio::sync::Mutex::new(Connection {
+                requests: Some(requests),
+                handle: None,
+            }),
+        }),
+    };
+    let response = tokio::time::timeout(
+        std::time::Duration::from_secs(3),
+        client.request(client.inner.base_url.clone()),
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        response.unwrap_err().status,
+        axum::http::StatusCode::GATEWAY_TIMEOUT
+    );
 }

@@ -1,7 +1,7 @@
 use axum::{Extension, Router, extract::State, routing::get};
 
 use crate::error::Error;
-use crate::sites::faceit::{Client, Nickname, models::Player};
+use crate::sites::faceit::{Nickname, client::Client, models::Player};
 
 use super::model::EloInfo;
 

@@ -1,6 +1,5 @@
 use std::sync::{Arc, Mutex};
 use std::thread;
-use std::time::Duration;
 
 use obscura::Browser;
 use serde::de::DeserializeOwned;
@@ -10,7 +9,9 @@ use url::Url;
 
 use crate::error::Error;
 
-const TIMEOUT: Duration = Duration::from_secs(20);
+use super::config::Config;
+
+const REQUEST_QUEUE_CAPACITY: usize = 16;
 
 #[derive(Clone)]
 pub struct Client {
@@ -18,6 +19,7 @@ pub struct Client {
 }
 
 struct ClientInner {
+    config: Config,
     base_url: Url,
     connection: tokio::sync::Mutex<Connection>,
 }
@@ -28,6 +30,7 @@ struct Connection {
 }
 
 struct Worker {
+    config: Config,
     browser: Browser,
     requests: mpsc::Receiver<Request>,
 }
@@ -38,15 +41,16 @@ struct Request {
 }
 
 impl Client {
-    pub fn new() -> anyhow::Result<Self> {
-        Self::with_base_url(Url::parse("https://api.faceit.com/")?)
+    pub fn new(config: Config) -> anyhow::Result<Self> {
+        Self::with_base_url(Url::parse("https://api.faceit.com/")?, config)
     }
 
-    pub fn with_base_url(base_url: Url) -> anyhow::Result<Self> {
-        let connection = Connection::spawn()?;
+    pub fn with_base_url(base_url: Url, config: Config) -> anyhow::Result<Self> {
+        let connection = Connection::spawn(config)?;
         Ok(Self {
             inner: Arc::new(ClientInner {
                 base_url,
+                config,
                 connection: tokio::sync::Mutex::new(connection),
             }),
         })
@@ -76,9 +80,11 @@ impl Client {
 
     async fn request(&self, url: Url) -> Result<Value, Error> {
         let (reply, response) = oneshot::channel();
-        tokio::time::timeout(TIMEOUT, async {
+        tokio::time::timeout(self.inner.config.request_timeout(), async {
             self.inner
-                .send(Request { url, reply }, Connection::spawn)
+                .send(Request { url, reply }, || {
+                    Connection::spawn(self.inner.config)
+                })
                 .await?;
             response.await.map_err(|_| unavailable())?
         })
@@ -127,9 +133,9 @@ impl ClientInner {
 }
 
 impl Connection {
-    fn spawn() -> anyhow::Result<Self> {
-        let (requests, receiver) = mpsc::channel(16);
-        let handle = Worker::spawn(receiver)?;
+    fn spawn(config: Config) -> anyhow::Result<Self> {
+        let (requests, receiver) = mpsc::channel(REQUEST_QUEUE_CAPACITY);
+        let handle = Worker::spawn(receiver, config)?;
         Ok(Self {
             requests: Some(requests),
             handle: Some(handle),
@@ -149,7 +155,10 @@ impl Drop for Connection {
 }
 
 impl Worker {
-    fn spawn(requests: mpsc::Receiver<Request>) -> anyhow::Result<thread::JoinHandle<()>> {
+    fn spawn(
+        requests: mpsc::Receiver<Request>,
+        config: Config,
+    ) -> anyhow::Result<thread::JoinHandle<()>> {
         let runtime = tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()?;
@@ -157,7 +166,11 @@ impl Worker {
             let _guard = runtime.enter();
             Browser::builder().stealth(true).build()?
         };
-        let worker = Self { browser, requests };
+        let worker = Self {
+            browser,
+            requests,
+            config,
+        };
         Ok(thread::Builder::new()
             .name("faceit-browser".into())
             .spawn(move || runtime.block_on(worker.run()))?)
@@ -168,7 +181,7 @@ impl Worker {
             let result = tokio::select! {
                 biased;
                 _ = reply.closed() => continue,
-                result = tokio::time::timeout(TIMEOUT, self.fetch(url)) => {
+                result = tokio::time::timeout(self.config.request_timeout(), self.fetch(url)) => {
                     result.unwrap_or_else(|_| Err(timed_out()))
                 }
             };
@@ -187,7 +200,8 @@ impl Worker {
             }
         }));
         page.goto(url.as_str()).await.map_err(|_| unavailable())?;
-        page.settle(3000).await;
+        page.settle(self.config.settle_timeout().as_millis() as u64)
+            .await;
         let (status, body) = response.lock().unwrap().take().ok_or_else(unavailable)?;
         match status {
             200 => serde_json::from_slice(&body)
@@ -215,5 +229,5 @@ fn timed_out() -> Error {
 }
 
 #[cfg(test)]
-#[path = "../../tests/sites/faceit/client/tests.rs"]
+#[path = "../../../tests/sites/faceit/client/client/tests.rs"]
 mod tests;

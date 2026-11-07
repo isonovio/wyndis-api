@@ -12,9 +12,13 @@ async fn age_uses_person_middleware_and_returns_plain_text() {
     let now = Timestamp::now().to_zoned(TimeZone::UTC);
     let birthday = now.strftime("2000-%m-%d");
     let config: Config = toml::from_str(&format!(
-        "bind_addr = '127.0.0.1:3000'\n[rate_limit.global]\nrequests_per_minute = 1000\nburst = 100\n[rate_limit.faceit]\nrequests_per_minute = 2\nburst = 1\n[[persons]]\nid = 'owner'\ntwitch_channel = 'streamer'\nbirthday = {birthday}\n[[persons]]\nid = 'missing'\ntwitch_channel = 'missing'\n[[persons]]\nid = 'future'\ntwitch_channel = 'future'\nbirthday = 9999-01-01\n[[persons]]\nid = 'invalid-midnight'\ntwitch_channel = 'invalid_midnight'\nbirthday = 2018-11-04\ntimezone = 'America/Sao_Paulo'"
+        "bind_addr = '127.0.0.1:3000'\n[global.rate_limit]\nrequests_per_minute = 1000\nburst = 100\n[faceit.rate_limit]\nrequests_per_minute = 2\nburst = 1\n[[persons]]\nid = 'owner'\ntwitch_channel = 'streamer'\nbirthday = {birthday}\n[[persons]]\nid = 'missing'\ntwitch_channel = 'missing'\n[[persons]]\nid = 'future'\ntwitch_channel = 'future'\nbirthday = 9999-01-01\n[[persons]]\nid = 'invalid-midnight'\ntwitch_channel = 'invalid_midnight'\nbirthday = 2018-11-04\ntimezone = 'America/Sao_Paulo'"
     )).unwrap();
-    let app = routes::compose(State::new(config.persons).unwrap(), config.rate_limit);
+    let app = routes::compose(
+        State::new(config.persons, config.faceit.client).unwrap(),
+        config.global,
+        config.faceit,
+    );
     for (header, status, expected) in [
         (
             Some("provider=twitch&name=invalid_midnight"),

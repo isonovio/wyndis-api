@@ -1,10 +1,18 @@
 bind_addr = "0.0.0.0:3000"
 
-[rate_limit.faceit]
+[faceit.rate_limit]
 requests_per_minute = 6
 burst = 1
 
-[rate_limit.global]
+[faceit.cache]
+ttl_secs = 30
+max_entries = 256
+
+[faceit.client]
+request_timeout_secs = 20
+settle_timeout_ms = 3000
+
+[global.rate_limit]
 requests_per_minute = 60000
 burst = 100
 

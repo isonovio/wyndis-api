@@ -8,11 +8,12 @@ use http_body_util::BodyExt;
 use serde_json::json;
 use tower::ServiceExt;
 use wyndis_api::{
-    config::{Config, RateLimits},
+    config::{Config, GlobalConfig},
+    endpoints::faceit,
     middlewares::rate_limit,
     models::Persons,
     routes::compose,
-    sites::faceit::Client,
+    sites::faceit::client::Client,
     state::State,
 };
 
@@ -20,21 +21,24 @@ const OWNER: &str = "channel_player";
 const OTHER: &str = "donk666";
 
 fn persons() -> Persons {
-    toml::from_str::<Config>(&format!("bind_addr = '127.0.0.1:3000'\n[rate_limit.global]\nrequests_per_minute = 600\nburst = 100\n[rate_limit.faceit]\nrequests_per_minute = 2\nburst = 1\n[[persons]]\nid = 'internal-owner'\ntwitch_channel = 'Streamer'\nfaceit_nickname = '{OWNER}'")).unwrap().persons
+    toml::from_str::<Config>(&format!("bind_addr = '127.0.0.1:3000'\n[global.rate_limit]\nrequests_per_minute = 600\nburst = 100\n[faceit.rate_limit]\nrequests_per_minute = 2\nburst = 1\n[[persons]]\nid = 'internal-owner'\ntwitch_channel = 'Streamer'\nfaceit_nickname = '{OWNER}'")).unwrap().persons
 }
 
 fn app(state: State) -> Router {
     compose(
         state,
-        RateLimits {
-            faceit: rate_limit::Config {
-                requests_per_minute: std::num::NonZeroU32::new(1000).unwrap(),
-                burst: std::num::NonZeroU32::new(100).unwrap(),
-            },
-            global: rate_limit::Config {
+        GlobalConfig {
+            rate_limit: rate_limit::Config {
                 requests_per_minute: std::num::NonZeroU32::new(600).unwrap(),
                 burst: std::num::NonZeroU32::new(100).unwrap(),
             },
+        },
+        faceit::config::Config {
+            rate_limit: rate_limit::Config {
+                requests_per_minute: std::num::NonZeroU32::new(1000).unwrap(),
+                burst: std::num::NonZeroU32::new(100).unwrap(),
+            },
+            ..Default::default()
         },
     )
 }
@@ -77,7 +81,7 @@ async fn fixture(
     let task = tokio::spawn(async move {
         axum::serve(listener, upstream).await.unwrap();
     });
-    let client = Client::with_base_url(url.parse().unwrap()).unwrap();
+    let client = Client::with_base_url(url.parse().unwrap(), Default::default()).unwrap();
     let persons = persons();
     (app(State::with_client(client, persons)), MockServer(task))
 }
@@ -154,7 +158,7 @@ async fn explicit_nickname_does_not_require_nightbot_headers() {
 #[tokio::test]
 async fn invalid_input_and_unknown_channel_are_handled() {
     // Rejected requests never reach FACEIT, so this test needs no listening socket.
-    let client = Client::new().unwrap();
+    let client = Client::new(Default::default()).unwrap();
     let persons = persons();
     let app = app(State::with_client(client, persons));
     for (uri, header, expected) in [
