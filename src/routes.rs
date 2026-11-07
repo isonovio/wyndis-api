@@ -1,5 +1,5 @@
 use anyhow::Result;
-use axum::{Router, middleware};
+use axum::{Router, http::StatusCode, middleware};
 
 use crate::config::{Config, GlobalConfig};
 use crate::endpoints::{age, faceit};
@@ -14,11 +14,18 @@ pub fn init(config: Config) -> Result<Router> {
 
 pub fn compose(state: State, global: GlobalConfig, faceit: faceit::config::Config) -> Router {
     let State { persons, client } = state;
-    let endpoints = age::route::init()
-        .nest("/faceit", faceit::routes::init(client, faceit))
+    let normal = Router::new()
+        .nest("/faceit", faceit::routes::init(client.clone(), faceit))
+        .layer(rate_limit::layer(global.rate_limit));
+    let nightbot = Router::new()
+        .merge(age::route::init())
+        .merge(faceit::routes::init(client, faceit))
         .route_layer(middleware::from_fn_with_state(persons, extract_person))
-        .route_layer(middleware::from_fn(nightbot::extract_twitch_channel));
-    Router::new()
-        .nest("/api", endpoints)
+        .route_layer(middleware::from_fn(nightbot::extract_twitch_channel))
+        .fallback(|| async { StatusCode::NOT_FOUND })
         .layer(rate_limit::layer(global.rate_limit))
+        .layer(middleware::from_fn(nightbot::silence_errors));
+    Router::new()
+        .nest("/api", normal)
+        .nest("/api/nightbot", nightbot)
 }

@@ -9,6 +9,7 @@ use http_body_util::BodyExt;
 use tower::ServiceExt;
 
 use crate::config::Config;
+use crate::models::Person;
 use crate::sources::nightbot::extract_twitch_channel;
 
 use super::*;
@@ -19,9 +20,7 @@ async fn resolves_person_without_requiring_faceit_data() {
     let app = Router::new()
         .route(
             "/",
-            get(|Extension(person): Extension<ResolvedPerson>| async move {
-                person.map(|person| person.id.clone())
-            }),
+            get(|Extension(person): Extension<Person>| async move { person.id }),
         )
         .route_layer(middleware::from_fn_with_state(
             Arc::new(config.persons),

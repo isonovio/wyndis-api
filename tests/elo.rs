@@ -115,7 +115,7 @@ async fn explicit_nickname_overrides_channel_mapping() {
     let (app, _mock) = fixture(StatusCode::OK, player(), OTHER).await;
     let (status, body) = request(
         app,
-        &format!("/api/faceit/elo?id={OTHER}"),
+        &format!("/api/nightbot/elo?id={OTHER}"),
         Some("provider=twitch&name=streamer&providerId=123"),
     )
     .await;
@@ -130,9 +130,9 @@ async fn explicit_nickname_overrides_channel_mapping() {
 async fn omitted_or_blank_nickname_uses_channel_owner() {
     let (app, _mock) = fixture(StatusCode::OK, player(), OWNER).await;
     for uri in [
-        "/api/faceit/elo",
-        "/api/faceit/elo?id=",
-        "/api/faceit/elo?id=%20",
+        "/api/nightbot/elo",
+        "/api/nightbot/elo?id=",
+        "/api/nightbot/elo?id=%20",
     ] {
         let (status, _) = request(
             app.clone(),
@@ -186,7 +186,7 @@ async fn invalid_input_and_unknown_channel_are_handled() {
         (
             "/api/faceit/elo",
             Some("provider=twitch&name=unknown_channel"),
-            StatusCode::NOT_FOUND,
+            StatusCode::BAD_REQUEST,
         ),
         ("/api/faceit/elo?id=a&id=b", None, StatusCode::BAD_REQUEST),
     ] {
@@ -272,4 +272,63 @@ async fn timeout_bounds_the_complete_elo_computation() {
     .expect("the total timeout must not restart after player lookup");
     assert_eq!(status, StatusCode::GATEWAY_TIMEOUT);
     assert_eq!(body, "FACEIT request timed out");
+}
+
+#[tokio::test]
+async fn nightbot_and_direct_elo_cache_successes_independently() {
+    let (app, mock) = fixture(StatusCode::OK, player(), OTHER).await;
+    let direct = request(app.clone(), &format!("/api/faceit/elo?id={OTHER}"), None).await;
+    assert_eq!(direct.0, StatusCode::OK);
+    for channel in [None, Some("invalid"), Some("provider=twitch&name=unknown")] {
+        assert_eq!(
+            request(
+                app.clone(),
+                &format!("/api/nightbot/elo?id={OTHER}"),
+                channel
+            )
+            .await,
+            (StatusCode::OK, " ".to_owned())
+        );
+    }
+    let nightbot = request(
+        app.clone(),
+        &format!("/api/nightbot/elo?id={OTHER}"),
+        Some("provider=twitch&name=streamer"),
+    )
+    .await;
+    assert_eq!(nightbot, direct);
+    mock.0.abort();
+    assert_eq!(
+        request(app.clone(), &format!("/api/faceit/elo?id={OTHER}"), None).await,
+        direct
+    );
+    assert_eq!(
+        request(
+            app,
+            &format!("/api/nightbot/elo?id={OTHER}"),
+            Some("provider=twitch&name=streamer")
+        )
+        .await,
+        nightbot
+    );
+}
+
+#[tokio::test]
+async fn nightbot_hides_upstream_failures_without_caching_them() {
+    let (app, _mock) = fixture(StatusCode::NOT_FOUND, player(), OTHER).await;
+    assert_eq!(
+        request(
+            app.clone(),
+            &format!("/api/nightbot/elo?id={OTHER}"),
+            Some("provider=twitch&name=streamer")
+        )
+        .await,
+        (StatusCode::OK, " ".to_owned())
+    );
+    assert_eq!(
+        request(app, &format!("/api/faceit/elo?id={OTHER}"), None)
+            .await
+            .0,
+        StatusCode::NOT_FOUND
+    );
 }

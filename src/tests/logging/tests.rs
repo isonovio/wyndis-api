@@ -7,9 +7,7 @@ use std::{
     time::Duration,
 };
 
-use axum::{
-    Extension, Router, body::Body, extract::Request, http::StatusCode, middleware, routing::get,
-};
+use axum::{Router, body::Body, extract::Request, http::StatusCode, middleware, routing::get};
 use tower::ServiceExt;
 use tracing::instrument::WithSubscriber;
 use tracing::warn;
@@ -59,16 +57,14 @@ async fn request(app: Router, path: &str) -> StatusCode {
 }
 
 #[tokio::test]
-async fn logs_rejections_but_not_unused_person_errors_or_propagation() {
-    use crate::middlewares::{faceit_nickname::extract_faceit_nickname, person::ResolvedPerson};
+async fn logs_direct_rejections_without_duplicate_propagation() {
+    use crate::middlewares::faceit_nickname::extract_faceit_nickname;
 
     let output = Output::default();
     async {
-        let person: ResolvedPerson = Err(Error::not_found("Unknown person"));
         let app = Router::new()
             .route("/elo", get(|| async { "ok" }))
             .route_layer(middleware::from_fn(extract_faceit_nickname))
-            .layer(Extension(person))
             .layer(rate_limit::layer(rate_limit::Config {
                 requests_per_minute: 1.try_into().unwrap(),
                 burst: 3.try_into().unwrap(),
@@ -78,7 +74,7 @@ async fn logs_rejections_but_not_unused_person_errors_or_propagation() {
             StatusCode::OK
         );
         assert!(output.text().is_empty());
-        assert_eq!(request(app.clone(), "/elo").await, StatusCode::NOT_FOUND);
+        assert_eq!(request(app.clone(), "/elo").await, StatusCode::BAD_REQUEST);
         assert_eq!(
             request(app.clone(), "/elo?id=invalid%20name").await,
             StatusCode::BAD_REQUEST
@@ -92,7 +88,7 @@ async fn logs_rejections_but_not_unused_person_errors_or_propagation() {
     .await;
     let text = output.text();
     assert_eq!(text.lines().count(), 3);
-    assert!(text.contains("Unknown person"));
+    assert!(text.contains("Missing FACEIT nickname"));
     assert!(text.contains("Invalid FACEIT nickname"));
     assert!(text.contains("Rate limit rejected request"));
 }

@@ -46,11 +46,21 @@ async fn middleware_resolves_nickname_before_handler() {
         (
             "/?id=donk666",
             Some("provider=twitch&name=unknown"),
-            StatusCode::OK,
-            "donk666",
+            StatusCode::NOT_FOUND,
+            "Unknown person",
         ),
-        ("/?id=donk666", None, StatusCode::OK, "donk666"),
-        ("/?id=donk666", Some("invalid"), StatusCode::OK, "donk666"),
+        (
+            "/?id=donk666",
+            None,
+            StatusCode::BAD_REQUEST,
+            "Missing Nightbot channel header",
+        ),
+        (
+            "/?id=donk666",
+            Some("invalid"),
+            StatusCode::BAD_REQUEST,
+            "Invalid Nightbot channel header",
+        ),
         (
             "/?id=donk666",
             Some("provider=twitch&name=streamer"),
@@ -75,10 +85,15 @@ async fn middleware_resolves_nickname_before_handler() {
             StatusCode::OK,
             "owner",
         ),
-        ("/?id=%20donk666%20", None, StatusCode::OK, "donk666"),
+        (
+            "/?id=%20donk666%20",
+            Some("provider=twitch&name=streamer"),
+            StatusCode::OK,
+            "donk666",
+        ),
         (
             "/?id=two%20names",
-            None,
+            Some("provider=twitch&name=streamer"),
             StatusCode::BAD_REQUEST,
             "Invalid FACEIT nickname",
         ),
@@ -102,7 +117,7 @@ async fn middleware_resolves_nickname_before_handler() {
         ),
         (
             "/?id=a&id=b",
-            None,
+            Some("provider=twitch&name=streamer"),
             StatusCode::BAD_REQUEST,
             "Invalid query parameters",
         ),

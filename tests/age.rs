@@ -61,7 +61,7 @@ async fn age_uses_person_middleware_and_returns_plain_text() {
             "Birthday is in the future".into(),
         ),
     ] {
-        let mut request = Request::builder().uri("/api/age");
+        let mut request = Request::builder().uri("/api/nightbot/age");
         if let Some(header) = header {
             request = request.header("nightbot-channel", header);
         }
@@ -70,7 +70,7 @@ async fn age_uses_person_middleware_and_returns_plain_text() {
             .oneshot(request.body(Body::empty()).unwrap())
             .await
             .unwrap();
-        assert_eq!(response.status(), status);
+        assert_eq!(response.status(), StatusCode::OK);
         assert!(
             response.headers()["content-type"]
                 .to_str()
@@ -79,7 +79,11 @@ async fn age_uses_person_middleware_and_returns_plain_text() {
         );
         assert_eq!(
             response.into_body().collect().await.unwrap().to_bytes(),
-            expected
+            if status == StatusCode::OK {
+                expected
+            } else {
+                " ".to_owned()
+            }
         );
     }
 }

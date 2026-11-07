@@ -8,9 +8,8 @@ use serde::Deserialize;
 use tracing::warn;
 
 use crate::error::Error;
+use crate::models::Person;
 use crate::sites::faceit;
-
-use super::person::ResolvedPerson;
 
 #[derive(Deserialize)]
 struct NicknameQuery {
@@ -18,7 +17,7 @@ struct NicknameQuery {
 }
 
 pub async fn extract_faceit_nickname(
-    Extension(person): Extension<ResolvedPerson>,
+    person: Option<Extension<Person>>,
     mut request: Request,
     next: Next,
 ) -> Result<Response, Error> {
@@ -33,7 +32,9 @@ pub async fn extract_faceit_nickname(
             .inspect_err(|error| warn!(%error, "Invalid FACEIT nickname"))
             .map_err(|_| Error::bad_request("Invalid FACEIT nickname"))?,
         None => person
-            .inspect_err(|error| warn!(%error, "FACEIT person resolution failed"))?
+            .map(|Extension(person)| person)
+            .ok_or_else(|| warn!("Missing FACEIT nickname"))
+            .map_err(|_| Error::bad_request("Missing FACEIT nickname"))?
             .faceit_nickname
             .ok_or_else(|| warn!("Missing FACEIT nickname"))
             .map_err(|_| Error::not_found("Missing FACEIT nickname"))?,

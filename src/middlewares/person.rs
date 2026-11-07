@@ -7,23 +7,23 @@ use axum::{
     response::Response,
 };
 
-use crate::error::Error;
-use crate::models::{Person, Persons};
-use crate::sites::nightbot::TwitchChannel;
+use tracing::warn;
 
-pub type ResolvedPerson = Result<Person, Error>;
+use crate::error::Error;
+use crate::models::Persons;
+use crate::sites::twitch::TwitchChannelName;
 
 pub async fn extract_person(
     State(persons): State<Arc<Persons>>,
-    Extension(channel): Extension<TwitchChannel>,
+    Extension(channel): Extension<TwitchChannelName>,
     mut request: Request,
     next: Next,
-) -> Response {
-    let person: ResolvedPerson = channel.name().and_then(|channel| {
-        (persons.from_twitch(channel).cloned()).ok_or_else(|| Error::not_found("Unknown person"))
-    });
+) -> Result<Response, Error> {
+    let person = (persons.from_twitch(&channel).cloned())
+        .ok_or_else(|| warn!(%channel, "Unknown person"))
+        .map_err(|_| Error::not_found("Unknown person"))?;
     request.extensions_mut().insert(person);
-    next.run(request).await
+    Ok(next.run(request).await)
 }
 
 #[cfg(test)]

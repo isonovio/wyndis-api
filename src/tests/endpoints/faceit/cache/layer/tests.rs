@@ -15,9 +15,7 @@ use axum::{
 use http_body_util::BodyExt;
 use tower::ServiceExt;
 
-use crate::middlewares::{
-    faceit_nickname::extract_faceit_nickname, person::ResolvedPerson, rate_limit,
-};
+use crate::middlewares::{faceit_nickname::extract_faceit_nickname, rate_limit};
 use crate::models::Person;
 
 use super::*;
@@ -53,7 +51,7 @@ fn app(cache: Cache, calls: Arc<AtomicUsize>, limited: bool) -> Router {
     let person: Person = toml::from_str("id = 'owner'\nfaceit_nickname = 'owner'").unwrap();
     app.route_layer(cache)
         .route_layer(middleware::from_fn(extract_faceit_nickname))
-        .layer(Extension(ResolvedPerson::Ok(person)))
+        .layer(Extension(person))
 }
 
 async fn request(app: &Router, path: &str) -> Response {

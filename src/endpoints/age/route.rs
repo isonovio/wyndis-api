@@ -3,7 +3,7 @@ use jiff::{Timestamp, tz::TimeZone};
 use tracing::{error, warn};
 
 use crate::error::Error;
-use crate::middlewares::person::ResolvedPerson;
+use crate::models::Person;
 
 use super::model::Age;
 
@@ -11,8 +11,7 @@ pub fn init() -> Router {
     Router::new().route("/age", get(age))
 }
 
-async fn age(Extension(person): Extension<ResolvedPerson>) -> Result<String, Error> {
-    let person = person.inspect_err(|error| warn!(%error, "Age person resolution failed"))?;
+async fn age(Extension(person): Extension<Person>) -> Result<String, Error> {
     let birthday = (person.birthday)
         .ok_or_else(|| warn!(person = %person.id, "Missing birthday"))
         .map_err(|_| Error::not_found("Missing birthday"))?;
