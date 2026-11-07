@@ -1,6 +1,7 @@
 use std::collections::{HashMap, HashSet};
 use std::fmt;
 
+use jiff::Timestamp;
 use serde::Deserialize;
 use uuid::Uuid;
 
@@ -32,7 +33,8 @@ pub struct Match {
     pub id: String,
     #[serde(rename = "matchRound")]
     pub round: String,
-    pub date: i64,
+    #[serde(with = "jiff::fmt::serde::timestamp::millisecond::required")]
+    pub date: Timestamp,
     pub status: String,
     pub elo: Option<String>,
     pub elo_delta: Option<String>,
@@ -111,8 +113,8 @@ impl Match {
     pub async fn fetch(
         client: &Client,
         id: Uuid,
-        start: i64,
-        now: i64,
+        start: Timestamp,
+        now: Timestamp,
     ) -> Result<Vec<Self>, Error> {
         let mut matches = Vec::new();
         let mut seen = HashSet::new();
@@ -126,14 +128,12 @@ impl Match {
                     ],
                 )
                 .await?;
-            let done = history.len() < HISTORY_PAGE_SIZE
-                || history
-                    .iter()
-                    .any(|game| game.date.div_euclid(1000) < start);
+            let done =
+                history.len() < HISTORY_PAGE_SIZE || history.iter().any(|game| game.date < start);
             let mut added = false;
             for game in history {
                 if game.status == "APPLIED"
-                    && game.date.div_euclid(1000) <= now
+                    && game.date <= now
                     && seen.insert((game.id.clone(), game.round.clone()))
                 {
                     matches.push(game);

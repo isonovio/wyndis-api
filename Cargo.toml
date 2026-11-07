@@ -13,8 +13,6 @@ required-features = ["obscura-test"]
 [dependencies]
 anyhow = "1"
 axum = "0.8"
-chrono = { version = "0.4", default-features = false, features = ["clock"] }
-chrono-tz = { version = "0.10", features = ["serde"] }
 clap = { version = "4.6", features = ["derive"] }
 governor = "0.10"
 jiff = { version = "0.2", features = ["serde"] }

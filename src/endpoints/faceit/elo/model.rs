@@ -1,7 +1,6 @@
-use std::{
-    fmt,
-    time::{SystemTime, UNIX_EPOCH},
-};
+use std::fmt;
+
+use jiff::Timestamp;
 
 use crate::error::Error;
 
@@ -23,19 +22,20 @@ pub struct EloInfo {
 
 impl EloInfo {
     pub async fn fetch(client: &Client, player: &Player) -> Result<Self, Error> {
-        let now = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .map_err(|_| Error::internal_server_error("Invalid server time."))?
-            .as_secs() as i64;
-        Self::fetch_at(client, player, now).await
+        Self::fetch_at(client, player, Timestamp::now()).await
     }
 
-    pub async fn fetch_at(client: &Client, player: &Player, now: i64) -> Result<Self, Error> {
+    pub async fn fetch_at(client: &Client, player: &Player, now: Timestamp) -> Result<Self, Error> {
         let id = player.id;
         let game = player.games.get("cs2").ok_or_else(missing_elo)?;
         let elo = game.faceit_elo.ok_or_else(missing_elo)?;
         let level = game.skill_level.ok_or_else(missing_elo)?;
-        let start = day_start(now, game.region.timezone())?;
+        let timezone = game
+            .region
+            .timezone()
+            .ok_or_else(|| Error::internal_server_error("Unable to resolve FACEIT timezone"))?;
+        let start = day_start(now, timezone)
+            .ok_or_else(|| Error::bad_request("Missing regional midnight"))?;
         let (rank, matches) = tokio::try_join!(
             Ranking::fetch(client, id, &game.region),
             Match::fetch(client, id, start, now),

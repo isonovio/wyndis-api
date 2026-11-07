@@ -1,6 +1,8 @@
 use axum::http::StatusCode;
-use chrono::{DateTime, TimeZone, Utc};
-use chrono_tz::Tz;
+use jiff::{
+    Timestamp,
+    tz::{AmbiguousOffset, TimeZone},
+};
 use uuid::Uuid;
 
 use crate::error::Error;
@@ -45,25 +47,30 @@ impl Ranking {
 }
 
 impl Region {
-    pub fn timezone(&self) -> Tz {
-        match self.to_string().as_str() {
-            "NA" => chrono_tz::America::New_York,
-            "SA" => chrono_tz::America::Sao_Paulo,
-            "SEA" => chrono_tz::Asia::Singapore,
-            "OCE" => chrono_tz::Australia::Sydney,
-            _ => chrono_tz::Europe::Berlin,
-        }
+    pub fn timezone(&self) -> Option<TimeZone> {
+        let name = match self.to_string().as_str() {
+            "NA" => "America/New_York",
+            "SA" => "America/Sao_Paulo",
+            "SEA" => "Asia/Singapore",
+            "OCE" => "Australia/Sydney",
+            _ => "Europe/Berlin",
+        };
+        TimeZone::get(name).ok()
     }
 }
 
 impl Today {
-    pub fn from_matches(matches: &[Match], start: i64, now: i64) -> Result<Self, Error> {
+    pub fn from_matches(
+        matches: &[Match],
+        start: Timestamp,
+        now: Timestamp,
+    ) -> Result<Self, Error> {
         let mut today = Self {
             elo_diff: Some(0),
             ..Self::default()
         };
         for game in matches.iter().filter(|game| {
-            let finished = game.date.div_euclid(1000);
+            let finished = game.date;
             game.status == "APPLIED" && finished >= start && finished <= now
         }) {
             match game.won()? {
@@ -102,19 +109,13 @@ fn metric(value: Option<&str>) -> Option<f64> {
         .filter(|value| value.is_finite() && *value >= 0.0)
 }
 
-pub(crate) fn day_start(now: i64, timezone: Tz) -> Result<i64, Error> {
-    let local = DateTime::<Utc>::from_timestamp(now, 0)
-        .ok_or_else(|| Error::bad_gateway("Invalid timestamp"))?
-        .with_timezone(&timezone);
-    let midnight = local
-        .date_naive()
-        .and_hms_opt(0, 0, 0)
-        .ok_or_else(|| Error::bad_gateway("Invalid midnight"))?;
-    timezone
-        .from_local_datetime(&midnight)
-        .earliest()
-        .map(|date| date.timestamp())
-        .ok_or_else(|| Error::bad_request("Missing regional midnight"))
+pub(crate) fn day_start(now: Timestamp, timezone: TimeZone) -> Option<Timestamp> {
+    let date = now.to_zoned(timezone.clone()).date();
+    let midnight = timezone.to_ambiguous_timestamp(date.at(0, 0, 0, 0));
+    match midnight.offset() {
+        AmbiguousOffset::Gap { .. } => None,
+        _ => midnight.earlier().ok(),
+    }
 }
 
 #[cfg(test)]
