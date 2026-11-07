@@ -26,7 +26,7 @@ cargo clippy --all-targets -- -D warnings
 
 #### Endpoint `GET /api/faceit/elo?id=donk666`
 
-- Rate limit: 1/10s
+- Rate limit: 1/10s on cache misses
 
 - Nightbot Command
     - Usage: `!elo` / `!elo donk666`
