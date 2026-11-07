@@ -3,6 +3,7 @@ use std::fmt;
 
 use jiff::Timestamp;
 use serde::Deserialize;
+use tracing::warn;
 use uuid::Uuid;
 
 use crate::error::Error;
@@ -105,7 +106,11 @@ impl Player {
             .map_err(|_| invalid_data())?
             .pop_if_empty()
             .push(&nickname.to_string());
-        client.fetch(path.path().trim_start_matches('/'), &[]).await
+        (client.fetch(path.path().trim_start_matches('/'), &[]).await).inspect_err(|error| {
+            if error.status == axum::http::StatusCode::NOT_FOUND {
+                warn!(%nickname, "FACEIT player not found");
+            }
+        })
     }
 }
 
@@ -127,7 +132,12 @@ impl Match {
                         ("size", HISTORY_PAGE_SIZE.to_string()),
                     ],
                 )
-                .await?;
+                .await
+                .inspect_err(|error| {
+                    if error.status == axum::http::StatusCode::NOT_FOUND {
+                        warn!(%id, page, "FACEIT history not found");
+                    }
+                })?;
             let done =
                 history.len() < HISTORY_PAGE_SIZE || history.iter().any(|game| game.date < start);
             let mut added = false;
@@ -148,6 +158,7 @@ impl Match {
                 break;
             }
         }
+        warn!(%id, "Daily history pagination limit exceeded");
         Err(Error::bad_gateway(
             "Daily history pagination limit exceeded",
         ))

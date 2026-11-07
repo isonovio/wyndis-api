@@ -4,6 +4,7 @@ use anyhow::Result;
 use axum::Router;
 use clap::Parser;
 use tokio::net::TcpListener;
+use tracing::{error, info};
 
 use wyndis_api::{args::Args, config::Config, env::Env, logging, routes};
 
@@ -23,7 +24,7 @@ async fn main() -> Result<()> {
 
 async fn serve(addr: SocketAddr, router: Router) -> Result<()> {
     let listener = TcpListener::bind(addr).await?;
-    tracing::info!(address = %listener.local_addr()?, "listening");
+    info!(target: "wyndis_api::lifecycle", address = %listener.local_addr()?, "listening");
     axum::serve(listener, router)
         .with_graceful_shutdown(shutdown())
         .await?;
@@ -32,6 +33,6 @@ async fn serve(addr: SocketAddr, router: Router) -> Result<()> {
 
 async fn shutdown() {
     if let Err(error) = tokio::signal::ctrl_c().await {
-        tracing::error!(%error, "failed to listen for shutdown signal");
+        error!(target: "wyndis_api::lifecycle", %error, "failed to listen for shutdown signal");
     }
 }

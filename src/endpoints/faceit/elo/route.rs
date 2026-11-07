@@ -1,4 +1,5 @@
 use axum::{Extension, Router, extract::State, routing::get};
+use tracing::warn;
 
 use crate::error::Error;
 use crate::sites::faceit::{Nickname, client::Client, models::Player};
@@ -15,6 +16,7 @@ async fn elo(
 ) -> Result<String, Error> {
     tokio::time::timeout(client.request_timeout(), fetch(&client, &nickname))
         .await
+        .inspect_err(|_| warn!(%nickname, "Elo computation timed out"))
         .map_err(|_| Error::gateway_timeout("FACEIT request timed out"))?
 }
 

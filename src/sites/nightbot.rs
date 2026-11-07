@@ -32,9 +32,7 @@ pub fn parse_channel(headers: &HeaderMap) -> TwitchChannel {
     let Some(header) = headers.get("nightbot-channel") else {
         return TwitchChannel::Missing;
     };
-    let channel = header
-        .to_str()
-        .ok()
+    let channel = (header.to_str().ok())
         .and_then(|value| serde_urlencoded::from_str::<ChannelHeader>(value).ok());
     match channel {
         Some(channel) => match channel.provider.as_str() {

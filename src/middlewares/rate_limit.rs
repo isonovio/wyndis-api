@@ -1,4 +1,5 @@
 use std::{num::NonZeroU32, time::Duration};
+use tracing::warn;
 
 use axum::{
     body::Body,
@@ -40,6 +41,7 @@ pub fn layer(config: Config) -> GovernorLayer<GlobalKeyExtractor, NoOpMiddleware
 }
 
 fn error_response(error: GovernorError) -> Response {
+    warn!(%error, "Rate limit rejected request");
     match error {
         GovernorError::TooManyRequests { wait_time, .. } => (
             StatusCode::TOO_MANY_REQUESTS,

@@ -51,7 +51,7 @@ Implement one checkpoint at a time, validate it, and stop for review. Do not com
 - Browser settling returns when idle or when the configured maximum is reached; it is not a mandatory fixed sleep.
 - History pagination permits 34 pages of 30 records. Exceeding the cap without completing the requested history returns an error rather than partial daily statistics.
 - Nickname URL construction must remove the trailing empty path segment before appending the escaped nickname, avoiding `/users/v1/nicknames//<nickname>`.
-- Logging policy is not yet enforced: most failed requests produce no log, while worker recovery can log during successful requests or emit multiple messages on failure. The target policy is no logs for successful requests and exactly one per failed request, with lifecycle logs separate. Implementation is deferred in `TODO.md`.
+- Log terminal failures once at the layer that understands them, including original browser/JSON error details. Propagation, successful recovery, optional ranking 404s, and unused Person-resolution errors stay silent. Shared cache failures log once per computation, not per waiting request. Error constructors have no logging side effects. There is no response-logging middleware; framework-generated 404/405 responses are silent. Process and worker lifecycle events use `wyndis_api::lifecycle`.
 
 ## Validation
 

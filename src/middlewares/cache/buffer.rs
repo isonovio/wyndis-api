@@ -3,6 +3,7 @@ use axum::{
     http::{HeaderMap, StatusCode},
     response::{IntoResponse, Response},
 };
+use tracing::error;
 
 use super::kv::CachedValue;
 
@@ -24,11 +25,14 @@ impl BufferedResponse {
                 headers: parts.headers,
                 body,
             },
-            Err(_) => Self {
-                status: StatusCode::INTERNAL_SERVER_ERROR,
-                headers: HeaderMap::new(),
-                body: Bytes::from_static(b"Unable to buffer response"),
-            },
+            Err(error) => {
+                error!(%error, "Unable to buffer response");
+                Self {
+                    status: StatusCode::INTERNAL_SERVER_ERROR,
+                    headers: HeaderMap::new(),
+                    body: Bytes::from_static(b"Unable to buffer response"),
+                }
+            }
         }
     }
 }

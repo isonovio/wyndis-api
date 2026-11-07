@@ -1,6 +1,7 @@
 use std::fmt;
 
 use jiff::Timestamp;
+use tracing::{error, warn};
 
 use crate::error::Error;
 
@@ -27,39 +28,44 @@ impl EloInfo {
 
     pub async fn fetch_at(client: &Client, player: &Player, now: Timestamp) -> Result<Self, Error> {
         let id = player.id;
-        let game = player.games.get("cs2").ok_or_else(missing_elo)?;
-        let elo = game.faceit_elo.ok_or_else(missing_elo)?;
-        let level = game.skill_level.ok_or_else(missing_elo)?;
-        let timezone = game
-            .region
-            .timezone()
-            .ok_or_else(|| Error::internal_server_error("Unable to resolve FACEIT timezone"))?;
+        let game = (player.games.get("cs2"))
+            .ok_or_else(missing_elo)
+            .inspect_err(|error| warn!(%id, %error))?;
+        let elo = (game.faceit_elo)
+            .ok_or_else(missing_elo)
+            .inspect_err(|error| warn!(%id, %error))?;
+        let level = (game.skill_level)
+            .ok_or_else(missing_elo)
+            .inspect_err(|error| warn!(%id, %error))?;
+        let timezone = (game.region.timezone())
+            .ok_or_else(|| Error::internal_server_error("Unable to resolve FACEIT timezone"))
+            .inspect_err(|error| error!(%id, %error))?;
         let start = day_start(now, timezone)
-            .ok_or_else(|| Error::bad_request("Missing regional midnight"))?;
+            .ok_or_else(|| Error::bad_request("Missing regional midnight"))
+            .inspect_err(|error| warn!(%id, %error))?;
         let (rank, matches) = tokio::try_join!(
             Ranking::fetch(client, id, &game.region),
             Match::fetch(client, id, start, now),
         )?;
+        let today = Today::from_matches(&matches, start, now)
+            .inspect_err(|error| warn!(%id, %error, "Invalid daily match data"))?;
+        let last_match = (matches.first().map(LastMatch::from_match).transpose())
+            .inspect_err(|error| warn!(%id, %error, "Invalid last match data"))?;
         Ok(Self {
             level,
             elo,
             rank: rank.position,
             region: game.region.clone(),
-            today: Today::from_matches(&matches, start, now)?,
-            last_match: matches.first().map(LastMatch::from_match).transpose()?,
+            today,
+            last_match,
         })
     }
 }
 
 impl fmt::Display for EloInfo {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let rank = self
-            .rank
-            .map(|rank| rank.to_string())
-            .unwrap_or_else(|| "N/A".into());
-        let diff = self
-            .today
-            .elo_diff
+        let rank = (self.rank.map(|rank| rank.to_string())).unwrap_or_else(|| "N/A".into());
+        let diff = (self.today.elo_diff)
             .map(|diff| format!("{diff:+}"))
             .unwrap_or_else(|| "N/A".into());
         write!(

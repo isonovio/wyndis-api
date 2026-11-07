@@ -20,10 +20,7 @@ pub async fn extract_person(
     next: Next,
 ) -> Response {
     let person: ResolvedPerson = channel.name().and_then(|channel| {
-        persons
-            .from_twitch(channel)
-            .cloned()
-            .ok_or_else(|| Error::not_found("Unknown person"))
+        (persons.from_twitch(channel).cloned()).ok_or_else(|| Error::not_found("Unknown person"))
     });
     request.extensions_mut().insert(person);
     next.run(request).await

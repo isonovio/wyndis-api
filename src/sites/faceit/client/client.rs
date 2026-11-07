@@ -6,6 +6,7 @@ use obscura::Browser;
 use serde::de::DeserializeOwned;
 use serde_json::Value;
 use tokio::sync::{mpsc, oneshot};
+use tracing::{error, warn};
 use url::Url;
 
 use crate::error::Error;
@@ -72,8 +73,11 @@ impl Client {
     }
 
     fn build_url(&self, path: &str, query: &[(&str, String)]) -> Result<Url, Error> {
-        let mut url = self.inner.base_url.join(path).map_err(|_| unavailable())?;
+        let mut url = (self.inner.base_url.join(path))
+            .inspect_err(|error| error!(%error, path, "Invalid FACEIT URL"))
+            .map_err(|_| unavailable())?;
         if url.origin() != self.inner.base_url.origin() {
+            error!(%url, "FACEIT URL origin mismatch");
             return Err(unavailable());
         }
         if !query.is_empty() {
@@ -85,15 +89,18 @@ impl Client {
 
     async fn request(&self, url: Url) -> Result<Value, Error> {
         let (reply, response) = oneshot::channel();
-        tokio::time::timeout(self.inner.config.request_timeout(), async {
+        let timeout = tokio::time::timeout(self.inner.config.request_timeout(), async {
             let request = Request { url, reply };
             self.inner
                 .send(request, || Connection::spawn(self.inner.config))
                 .await?;
-            response.await.map_err(|_| unavailable())?
-        })
-        .await
-        .map_err(|_| timed_out())?
+            (response.await)
+                .inspect_err(|error| error!(%error, "FACEIT worker reply lost"))
+                .map_err(|_| unavailable())?
+        });
+        (timeout.await)
+            .inspect_err(|_| warn!("FACEIT request timed out"))
+            .map_err(|_| timed_out())?
     }
 }
 
@@ -103,20 +110,15 @@ impl ClientInner {
         request: Request,
         spawn: impl FnOnce() -> anyhow::Result<Connection>,
     ) -> Result<(), Error> {
-        let requests = self
-            .connection
-            .lock()
-            .await
-            .requests
-            .as_ref()
-            .unwrap()
-            .clone();
+        let requests = (self.connection.lock().await.requests.as_ref().unwrap()).clone();
         let request = match requests.send(request).await {
             Ok(()) => return Ok(()),
             Err(error) => error.0,
         };
         let replacement = self.replace(&requests, spawn).await?;
-        replacement.send(request).await.map_err(|_| unavailable())
+        (replacement.send(request).await)
+            .inspect_err(|error| error!(%error, "FACEIT worker queue closed after restart"))
+            .map_err(|_| unavailable())
     }
 
     async fn replace(
@@ -126,11 +128,9 @@ impl ClientInner {
     ) -> Result<mpsc::Sender<Request>, Error> {
         let mut connection = self.connection.lock().await;
         if connection.requests.as_ref().unwrap().same_channel(requests) {
-            tracing::warn!("Restarting FACEIT browser worker");
-            *connection = spawn().map_err(|error| {
-                tracing::error!(%error, "Failed to restart FACEIT browser worker");
-                unavailable()
-            })?;
+            *connection = spawn()
+                .inspect_err(|error| error!(%error, "Failed to restart FACEIT worker"))
+                .map_err(|_| unavailable())?;
         }
         Ok(connection.requests.as_ref().unwrap().clone())
     }
@@ -153,7 +153,7 @@ impl Drop for Connection {
         if let Some(handle) = self.handle.take()
             && handle.join().is_err()
         {
-            tracing::error!("FACEIT browser worker panicked");
+            error!(target: "wyndis_api::lifecycle", "FACEIT browser worker panicked");
         }
     }
 }
@@ -186,7 +186,9 @@ impl Worker {
                 biased;
                 _ = reply.closed() => continue,
                 result = tokio::time::timeout(self.config.request_timeout(), self.fetch(url)) => {
-                    result.unwrap_or_else(|_| Err(timed_out()))
+                    result
+                        .inspect_err(|_| warn!("FACEIT worker fetch timed out"))
+                        .unwrap_or_else(|_| Err(timed_out()))
                 }
             };
             let _ = reply.send(result);
@@ -194,7 +196,9 @@ impl Worker {
     }
 
     async fn fetch(&self, url: Url) -> Result<Value, Error> {
-        let mut page = self.browser.new_page().await.map_err(|_| unavailable())?;
+        let mut page = (self.browser.new_page().await)
+            .inspect_err(|error| error!(%error, %url, "Failed to create FACEIT page"))
+            .map_err(|_| unavailable())?;
         let response = Arc::new(Mutex::new(None));
         let captured = response.clone();
         let target = url.clone();
@@ -203,16 +207,27 @@ impl Worker {
                 *captured.lock().unwrap() = Some((response.status, response.body.clone()));
             }
         }));
-        page.goto(url.as_str()).await.map_err(|_| unavailable())?;
+        (page.goto(url.as_str()).await)
+            .inspect_err(|error| error!(%error, %url, "FACEIT navigation failed"))
+            .map_err(|_| unavailable())?;
         page.settle(self.config.settle_timeout().as_millis() as u64)
             .await;
-        let (status, body) = response.lock().unwrap().take().ok_or_else(unavailable)?;
+        let (status, body) = (response.lock().unwrap().take())
+            .ok_or_else(|| warn!(%url, "FACEIT response missing"))
+            .map_err(|_| unavailable())?;
         match status {
             200 => serde_json::from_slice(&body)
+                .inspect_err(|error| warn!(%error, %url, "Invalid FACEIT JSON"))
                 .map_err(|_| Error::bad_gateway("Invalid FACEIT response")),
             404 => Err(Error::not_found("FACEIT resource not found")),
-            429 => Err(Error::service_unavailable("FACEIT rate limit exceeded")),
-            _ => Err(unavailable()),
+            429 => {
+                warn!(%url, status, "FACEIT rate limit exceeded");
+                Err(Error::service_unavailable("FACEIT rate limit exceeded"))
+            }
+            _ => {
+                warn!(%url, status, "Unexpected FACEIT status");
+                Err(unavailable())
+            }
         }
     }
 }
@@ -221,7 +236,9 @@ fn deserialize<T: DeserializeOwned>(mut value: Value) -> Result<T, Error> {
     if let Some(payload) = value.get_mut("payload") {
         value = payload.take();
     }
-    serde_json::from_value(value).map_err(|_| Error::bad_gateway("Invalid FACEIT response"))
+    serde_json::from_value(value)
+        .inspect_err(|error| warn!(%error, model = std::any::type_name::<T>(), "Invalid FACEIT response data"))
+        .map_err(|_| Error::bad_gateway("Invalid FACEIT response"))
 }
 
 fn unavailable() -> Error {
