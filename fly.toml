@@ -19,4 +19,3 @@ primary_region = 'ams'
 [[vm]]
   memory = '256mb'
   cpus = 1
-  memory_mb = 256
